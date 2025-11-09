@@ -4,6 +4,17 @@ import { importMod } from '../importer';
 import { triggerEvent } from '../utils';
 
 /**
+ * Get a mod meta by its ID
+ * @param {string} modId 
+ * @returns 
+ */
+const get = (modId: string) => {
+  const index = window.YASCML.mods.findIndex(e => e.id === modId);
+  if (index === -1) return null;
+  return window.YASCML.mods[index];
+};
+
+/**
  * Add a mod, could be a `Blob` or file url.
  * @param file 
  */
@@ -40,35 +51,28 @@ const remove = async (modId: string) => {
 };
 
 const enable = (modId: string) => {
-  const index = window.YASCML.mods.findIndex(e => e.id === modId);
-  if (index === -1)
+  const mod = get(modId);
+  if (!mod)
     throw new Error(`Cannot find mod ID: ${modId}`);
 
   removeDisabledMod(modId);
-  window.YASCML.mods[index].enabled = true;
-  triggerEvent('$modenabled', { mod: window.YASCML.mods[index] });
+  mod.enabled = true;
+  triggerEvent('$modenabled', { mod });
 };
 
 const disable = (modId: string) => {
-  const index = window.YASCML.mods.findIndex(e => e.id === modId);
-  if (index === -1)
+  const mod = get(modId);
+  if (!mod)
     throw new Error(`Cannot find mod ID: ${modId}`);
 
   addDisabledMod(modId);
-  window.YASCML.mods[index].enabled = false;
-  triggerEvent('$moddisabled', { mod: window.YASCML.mods[index] });
-};
-
-const get = (modId: string) => {
-  const index = window.YASCML.mods.findIndex(e => e.id === modId);
-  if (index === -1)
-    throw new Error(`Cannot find mod ID: ${modId}`);
-
-  return window.YASCML.mods[index];
+  mod.enabled = false;
+  triggerEvent('$moddisabled', { mod });
 };
 
 const releaseFiles = (modId: string) => {
   const mod = get(modId);
+  if (!mod) return;
   if (mod.zip) delete mod.zip;
 };
 

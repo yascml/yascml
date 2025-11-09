@@ -23,6 +23,7 @@ export const ModList = () => {
   const toggleEnabled = (id: string) => {
     if (id === 'yascmanager') return;
     const mod = window.YASCML.api.mod.get(id);
+    if (!mod) return;
     if (mod.enabled) window.YASCML.api.mod.disable(id);
     else window.YASCML.api.mod.enable(id);
   }
