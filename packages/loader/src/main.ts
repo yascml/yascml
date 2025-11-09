@@ -20,6 +20,10 @@ if (window.Reflect == null) {
 canLoadBlob().finally();
 
 window.addEventListener('DOMContentLoaded', async () => {
+  if (!document.querySelector('script#script-sugarcube')) {
+    throw new Error('This is not a SugarCube game! YASCML will not run.');
+  }
+
   loadStyle([
     '@keyframes _YASCML_BLINK_ {',
     'from { opacity: 1; }',
@@ -31,7 +35,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   if (window.__SUGARCUBE_PATCHER) {
     changeSplashText('Patching engine...');
-    await Promise.resolve(window.__SUGARCUBE_PATCHER());
+
+    try {
+      await Promise.resolve(window.__SUGARCUBE_PATCHER());
+    } catch (e) {
+      console.error('Error when patching engine:');
+      console.error(e);
+    }
   }
 
   if (!window.$SugarCube) {

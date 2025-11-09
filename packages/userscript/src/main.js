@@ -136,6 +136,13 @@ html[data-init=yascml-loading] #init-loading>div {
     dom.appendChild(style);
   });
 
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('script#script-sugarcube')) return;
+
+  observer.disconnect();
+  document.documentElement.removeAttribute('data-init');
+});
+
 // Build an entry to import mods
 document.addEventListener('$gamestarted', () => {
   try {
