@@ -209,9 +209,16 @@ export const getFileMD5 = (file: Blob, chunkSize = 2097152): Promise<string> => 
 export const isModSuitable = (mod: ModMetaFull) => {
   const { stats, mods, version } = window.YASCML;
 
-  if (mod.designedFor !== (void 0) && stats.gameName !== mod.designedFor) {
-    console.warn(`Mod "${mod.id}" is designed for "${mod.designedFor}", but it's running on "${stats.gameName}". This mod will not be loaded.`);
-    return false;
+  if (mod.designedFor !== (void 0)) {
+    if (typeof mod.designedFor !== 'string') {
+      if (!mod.designedFor.test(stats.gameName)) {
+        console.warn(`Mod "${mod.id}" is not designed for current game "${stats.gameName}". This mod will not be loaded.`);
+        return false;
+      }
+    } else if (mod.designedFor !== stats.gameName) {
+      console.warn(`Mod "${mod.id}" is not designed for current game "${stats.gameName}". This mod will not be loaded.`);
+      return false;
+    }
   }
 
   if (mod.dependencies === (void 0)) return true;

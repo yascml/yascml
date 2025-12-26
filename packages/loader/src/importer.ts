@@ -2,6 +2,8 @@ import JSZip from 'jszip';
 import { isValidModMeta, getFileMD5 } from './utils';
 import { ModMetaFile, ModMetaFull } from './types';
 
+const RegExpMatchReg = /^\/(\\\/|[^\/]+)\/([gimsuy]*)$/;
+
 export const importModFromFile = async (modZip: Blob, exposeZip: boolean) => {
   const zip = await JSZip.loadAsync(modZip);
   if (!zip.file('meta.json'))
@@ -30,6 +32,13 @@ export const importModFromFile = async (modZip: Blob, exposeZip: boolean) => {
   } catch (e) {
     console.warn(`Failed to get MD5 for mod: ${result.id}, using empty string`);
     console.error(e);
+  }
+
+  if (result.designedFor !== (void 0)) {
+    if (RegExpMatchReg.test(result.designedFor as string)) {
+      const [, regExp, regExpFlags ] = RegExpMatchReg.exec(result.designedFor as string)!;
+      result.designedFor = new RegExp(regExp, regExpFlags || '');
+    }
   }
 
   return result;

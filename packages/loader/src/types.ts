@@ -34,7 +34,8 @@ export type ModMetaFile = ModMeta & {
   cssFiles?: string[],
 };
 
-export type ModMetaFull = ModMetaFile & {
+export type ModMetaFull = Omit<ModMetaFile, 'designedFor'> & {
+  designedFor?: string | RegExp,
   enabled: boolean,
   embedded: boolean,
   suitable: boolean,
