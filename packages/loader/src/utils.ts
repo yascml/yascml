@@ -41,13 +41,14 @@ export const readFileAsString = (file: Blob) => new Promise<string>((res, rej) =
 export const canLoadBlob = () => new Promise<boolean>((res) => {
   if (isBlobAllowed !== null) return res(isBlobAllowed);
 
+  const bodyDom = document.getElementsByTagName('body')[0] || document.head;
   const blob = new Blob([';window.__isBlobAllowed = true;']);
   const url = URL.createObjectURL(blob);
   const dom = document.createElement('script');
 
   const destroyStuff = () => {
     res(!!isBlobAllowed);
-    document.body.removeChild(dom);
+    bodyDom.removeChild(dom);
     URL.revokeObjectURL(url);
     delete window.__isBlobAllowed;
   };
@@ -62,7 +63,7 @@ export const canLoadBlob = () => new Promise<boolean>((res) => {
     destroyStuff();
   };
 
-  document.body.appendChild(dom);
+  bodyDom.appendChild(dom);
   try {
     dom.src = url;
   } catch {
