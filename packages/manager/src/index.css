@@ -285,6 +285,7 @@
     left .2s ease-out,
     opacity .2s ease-out;
   cursor: pointer;
+  z-index: 999;
 }
 
 #edge-yascmanager::before {

@@ -158,7 +158,8 @@ document.addEventListener('$gamestarted', () => {
     'color: #FFF',
     'text-shadow: 0 0 4px black',
     'opacity: 0.5',
-    'cursor: pointer'
+    'cursor: pointer',
+    'z-index: 999'
   ].join(';');
   entryDOM.innerText = '[Import Mods]';
   entryDOM.onclick = importMods;
