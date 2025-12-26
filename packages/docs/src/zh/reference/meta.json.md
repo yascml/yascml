@@ -76,7 +76,7 @@ title: meta.json
 * 类型：`string`
 * 默认值：`void`
 
-指定该模组是为何款游戏设计的。如果该值与当前游戏名称不符，则加载器会拒绝加载。
+指定该模组是为何款游戏设计的。该值支持文本化 [正则表达式](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Guide/Regular_expressions)。如果该值与当前游戏名称不符，则加载器会拒绝加载。
 
 ## `cssFiles`
 

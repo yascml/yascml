@@ -76,7 +76,7 @@ Other mods this mod depends on, expressed as key-value pairs of `modName:modVers
 * Type: `string`
 * Default: `void`
 
-Specifies which game this mod is designed for. If the value does not match the current game name, the loader will refuse to load it.
+Specifies which game this mod is designed for. Support stringified [RegExp](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Regular_expressions). If the value does not match the current game name, the loader will refuse to load it.
 
 ## `cssFiles`
 
