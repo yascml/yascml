@@ -76,18 +76,18 @@ export const initLoader = async () => {
       const modId = modIDs[i];
       changeSplashText(`Loading imported mods... (${i + 1}/${modIDs.length})[${modId}]`);
 
+      if (deletedMods.length > 0) {
+        const deletedModIndex = deletedMods.findIndex((i) => modId === i);
+
+        if (deletedModIndex !== -1) {
+          await IDB.del(modId);
+          continue;
+        }
+      }
+
       try {
         const modFile = await IDB.get(modId);
         const mod = await importMod(modFile, true);
-
-        if (deletedMods.length > 0) {
-          const deletedModIndex = deletedMods.findIndex((i) => mod.id === i);
-
-          if (deletedModIndex !== -1) {
-            await IDB.del(mod.id);
-            continue;
-          }
-        }
 
         window.YASCML.mods.push(mod);
       } catch (e) {
