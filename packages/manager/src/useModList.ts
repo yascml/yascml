@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { getLocalStorageAsArray } from '@yascml/utils';
 import type { ModMetaFull } from '@yascml/loader';
 
 export const useModList = () => {
@@ -10,26 +11,48 @@ export const useModList = () => {
   };
 
   const handleDeletedModsUpdate = () => {
-    let _deletedMods: string[] = [];
-    try {
-      const deletedModsRaw = localStorage.getItem('yascml-deleted-mods');
-      if (deletedModsRaw) {
-        _deletedMods = JSON.parse(deletedModsRaw) as string[];
+    const _n = getLocalStorageAsArray<string>('yascml-deleted-mods');
+    setDeletedMods(_n);
+  };
 
-        if (!(_deletedMods instanceof Array))
-          throw new Error('Failed to load deleted mods list: wrong format');
-      }
+  const updateDisabledModList = () => {
+    const _n: string[] = [];
 
-      setDeletedMods(_deletedMods);
-    } catch (e) {
-      console.warn(e);
-    }
+    window.YASCML.mods
+      .filter((e) => !e.enabled)
+      .forEach((mod) => {
+        _n.push(mod.id);
+      });
+
+    localStorage.setItem('yascml-disabled-mods', JSON.stringify(_n));
+  };
+
+  const UpdatesAllLists = () => {
+    handleDeletedModsUpdate();
+    handleModListUpdate();
+    updateDisabledModList();
   };
 
   const getMod = (modId: string) => {
-    const index = modList.findIndex((e) => e.id === modId);
-    if (index === -1) return null;
-    return modList[index];
+    return window.YASCML.mods.get(modId);
+  };
+
+  const enableMod = (modId: string) => {
+    const mod = window.YASCML.mods.get(modId);
+    if (!mod) return;
+    if (mod.enabled) return;
+
+    mod.enabled = true;
+    UpdatesAllLists();
+  };
+
+  const disableMod = (modId: string) => {
+    const mod = window.YASCML.mods.get(modId);
+    if (!mod) return;
+    if (!mod.enabled) return;
+
+    mod.enabled = false;
+    UpdatesAllLists();
   };
 
   const deleteMod = (modId: string) => {
@@ -62,21 +85,22 @@ export const useModList = () => {
     });
   };
 
-  const doManuallyUpdates = () => {
-    handleDeletedModsUpdate();
-    handleModListUpdate();
-  };
-
   useEffect(() => {
-    doManuallyUpdates();
+    UpdatesAllLists();
+
+    document.addEventListener('$modadded', UpdatesAllLists);
+    return (() => {
+      document.addEventListener('$modadded', UpdatesAllLists);
+    });
   }, []);
 
   return {
     modList,
     deletedMods,
     getMod,
+    enableMod,
+    disableMod,
     deleteMod,
     revertMod,
-    doManuallyUpdates
   };
 };

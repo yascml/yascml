@@ -111,7 +111,7 @@ export const initLoader = async () => {
 
   window.YASCML.mods.sort(sortMods);
 
-  const disabledMods = getLocalStorageAsArray('yascml-disabled-mods');
+  const disabledMods = getLocalStorageAsArray<string>('yascml-disabled-mods');
   for (const modId of disabledMods) {
     const index = window.YASCML.mods.findIndex(e => e.id === modId);
     if (index === -1) continue;

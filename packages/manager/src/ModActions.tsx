@@ -18,7 +18,7 @@ export const ModActinos = () => {
     const [ file ] = files;
     if (!file) return;
 
-    window.YASCML.api.mod.add(file);
+    window.YASCML.mods.add(file);
   };
 
   return (

@@ -22,18 +22,18 @@ export const ModList = () => {
   const {
     modList,
     deletedMods,
+    enableMod,
+    disableMod,
     deleteMod,
     revertMod,
-    doManuallyUpdates: updateModList
   } = useModList();
 
   const toggleEnabled = (id: string) => {
     if (id === 'yascmanager') return;
-    const mod = window.YASCML.api.mod.get(id);
+    const mod = window.YASCML.mods.get(id);
     if (!mod) return;
-    if (mod.enabled) window.YASCML.api.mod.disable(id);
-    else window.YASCML.api.mod.enable(id);
-    updateModList();
+    if (mod.enabled) disableMod(id);
+    else enableMod(id);
   }
 
   return (

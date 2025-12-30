@@ -8,7 +8,8 @@
     "build:prod": "tsc -b && vite build --mode production"
   },
   "dependencies": {
-    "preact": "^10.27.2"
+    "preact": "^10.27.2",
+    "@yascml/utils": "workspace:*"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.2",

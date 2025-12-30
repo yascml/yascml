@@ -183,6 +183,9 @@ importers:
 
   ../../packages/manager:
     dependencies:
+      '@yascml/utils':
+        specifier: workspace:*
+        version: link:../utils
       preact:
         specifier: ^10.27.2
         version: 10.27.2

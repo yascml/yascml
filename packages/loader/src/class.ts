@@ -1,5 +1,6 @@
 import { importMod } from './importer';
 import * as IDB from './storage';
+import { triggerEvent } from './utils';
 import type { ModMetaFull } from './types';
 
 export class ModList extends Array<ModMetaFull> {
@@ -21,6 +22,8 @@ export class ModList extends Array<ModMetaFull> {
       mod.updated = true;
       this.splice(oldModIndex, 1, mod);
     }
+
+    triggerEvent('$modadded', { mod });
   }
 
   releaseFile(modId: string) {
