@@ -92,7 +92,7 @@ const importMods = () => {
 
     for (const file of files) {
       try {
-        await window.YASCML.api.mod.add(file);
+        await window.YASCML.mods.add(file);
         successCount++;
       } catch (e) {
         console.error(`Failed loading mod "${file.name}"`);
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Build an entry to import mods
 document.addEventListener('$gamestarted', () => {
-  if (window.YASCML.api.mod.get('yascmanager')) return;
+  if (window.YASCML.mods.get('yascmanager')) return;
 
   const entryDOM = document.createElement('div');
 
