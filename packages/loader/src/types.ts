@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import api from './api';
+import { ModList } from './class';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
@@ -41,7 +41,6 @@ export type ModMetaFull = Omit<ModMetaFile, 'designedFor'> & {
   suitable: boolean,
   errored: boolean,
   new: boolean,
-  deleted: boolean,
   updated: boolean,
   md5: string,
   zip?: JSZip,
@@ -72,7 +71,6 @@ export type LoaderStats = {
 
 export type YASCML = {
   version: string,
-  mods: ModMetaFull[], // TODO
-  api: typeof api,
+  mods: ModList, // TODO
   stats: LoaderStats,
 };

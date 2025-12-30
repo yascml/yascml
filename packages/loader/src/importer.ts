@@ -22,7 +22,6 @@ export const importModFromFile = async (modZip: Blob, exposeZip: boolean) => {
     errored: false,
     new: false,
     updated: false,
-    deleted: false,
     md5: '',
   };
   if (exposeZip) result.zip = zip;

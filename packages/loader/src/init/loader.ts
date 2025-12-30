@@ -1,9 +1,9 @@
 import * as idbKeyval from 'idb-keyval';
 import JSZip from 'jszip';
+import { getLocalStorageAsArray } from '@yascml/utils';
 import * as IDB from '../storage';
-import * as Setting from '../settings/storage';
+import { ModList } from '../class';
 import { changeSplashText } from '../splash';
-import api from '../api';
 import { Logs } from '../patcher/console';
 import { importMod } from '../importer';
 import { isBlobAllowed, unescapeHTML, sortMods, isModSuitable } from '../utils';
@@ -30,8 +30,7 @@ export const initLoader = async () => {
 
     value: Object.seal(Object.assign(Object.create(null), {
       version: __LOADER_VERSION__,
-      mods: [],
-      api,
+      mods: new ModList(),
       stats: Object.create(null, {
         gameName: {
           get() { return unescapeHTML(document.querySelector<HTMLElement>('tw-storydata')!.getAttribute('name')!) },
@@ -57,21 +56,9 @@ export const initLoader = async () => {
   {
     changeSplashText('Loading imported mods...');
 
-    let deletedMods: string[] = [];
-    try {
-      const deletedModsRaw = localStorage.getItem('yascml-deleted-mods');
-      if (deletedModsRaw) {
-        deletedMods = JSON.parse(deletedModsRaw) as string[];
-
-        if (!(deletedMods instanceof Array))
-          throw new Error('Failed to load deleted mods list: wrong format');
-      }
-    } catch (e) {
-      console.warn(e);
-      deletedMods = [];
-    }
-
+    const deletedMods = getLocalStorageAsArray<string>('yascml-deleted-mods');
     const modIDs = await IDB.getKets();
+
     for (let i = 0; i < modIDs.length; i ++) {
       const modId = modIDs[i];
       changeSplashText(`Loading imported mods... (${i + 1}/${modIDs.length})[${modId}]`);
@@ -124,7 +111,8 @@ export const initLoader = async () => {
 
   window.YASCML.mods.sort(sortMods);
 
-  for (const modId of Setting.get('disabledMods')) {
+  const disabledMods = getLocalStorageAsArray('yascml-disabled-mods');
+  for (const modId of disabledMods) {
     const index = window.YASCML.mods.findIndex(e => e.id === modId);
     if (index === -1) continue;
 
