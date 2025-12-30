@@ -57,6 +57,20 @@ export const initLoader = async () => {
   {
     changeSplashText('Loading imported mods...');
 
+    let deletedMods: string[] = [];
+    try {
+      const deletedModsRaw = localStorage.getItem('yascml-deleted-mods');
+      if (deletedModsRaw) {
+        deletedMods = JSON.parse(deletedModsRaw) as string[];
+
+        if (!(deletedMods instanceof Array))
+          throw new Error('Failed to load deleted mods list: wrong format');
+      }
+    } catch (e) {
+      console.warn(e);
+      deletedMods = [];
+    }
+
     const modIDs = await IDB.getKets();
     for (let i = 0; i < modIDs.length; i ++) {
       const modId = modIDs[i];
@@ -65,12 +79,24 @@ export const initLoader = async () => {
       try {
         const modFile = await IDB.get(modId);
         const mod = await importMod(modFile, true);
+
+        if (deletedMods.length > 0) {
+          const deletedModIndex = deletedMods.findIndex((i) => mod.id === i);
+
+          if (deletedModIndex !== -1) {
+            await IDB.del(mod.id);
+            continue;
+          }
+        }
+
         window.YASCML.mods.push(mod);
       } catch (e) {
         console.warn(`Error when loading mod: ${modId}, skipping...`);
         console.error(e);
       }
     }
+
+    localStorage.setItem('yascml-deleted-mods', '[]');
   }
 
   if (window.YASCMLConfig) {
