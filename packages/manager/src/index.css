@@ -114,6 +114,7 @@
   border: 1px solid #444;
   height: 2.237em;
   width: 2.237em;
+  padding: .4em;
 }
 
 #ui-dialog-body.yascmanager #mods-list button:not(:disabled):hover {
