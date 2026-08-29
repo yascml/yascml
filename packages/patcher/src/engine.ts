@@ -238,7 +238,7 @@ export const patchEngineScript = (
           node.callee.object.name !== 'LoadScreen'
         ) return;
 
-        const parent = ancestors[ancestors.length - 2] as Expression | VariableDeclarator | ReturnStatement;
+        const parent = ancestors[ancestors.length - 2] as Expression | VariableDeclarator | ReturnStatement | ExpressionStatement;
         if (parent.type === 'ArrowFunctionExpression' && !resolveInjected) {
           // Replace `LoadScreen.unlock()` with `resolve()`
           // in `setTimeout(() => LoadScreen.unlock())`
@@ -286,7 +286,57 @@ export const patchEngineScript = (
           };
         } else if (parent.type === 'SequenceExpression') {
           const index = parent.expressions.findIndex(e => e === node);
-          parent.expressions.splice(index, 1);
+          const prop = (node.callee as MemberExpression).property;
+          if (prop.type === 'Identifier' && prop.name === 'unlock' && !resolveInjected) {
+            // Replace `LoadScreen.unlock(...)` with `resolve()`
+            // in a comma-separated sequence, e.g. the Degrees of Lewdity fork:
+            //   setInterval(() => {
+            //     $window.width() && (clearInterval(vprCheckId), ..., LoadScreen.unlock(lockId), ...)
+            //   }, Engine.minDomActionDelay)
+            parent.expressions[index] = {
+              type: 'CallExpression',
+              callee: {
+                type: 'Identifier',
+                name: 'resolve',
+                start: -1,
+                end: -1,
+              },
+              arguments: [],
+              optional: false,
+              start: -1,
+              end: -1,
+            };
+            resolveInjected = true;
+          } else {
+            parent.expressions.splice(index, 1);
+          }
+        } else if (parent.type === 'ExpressionStatement') {
+          // Bare `LoadScreen.*(...)` statement, e.g. the Degrees of Lewdity fork:
+          //   setInterval(() => {
+          //     ...
+          //     LoadScreen.unlock(lockId);
+          //   }, Engine.minDomActionDelay);
+          const prop = (node.callee as MemberExpression).property;
+          if (prop.type === 'Identifier' && prop.name === 'unlock' && !resolveInjected) {
+            // Replace `LoadScreen.unlock(...);` with `resolve();`
+            parent.expression = {
+              type: 'CallExpression',
+              callee: {
+                type: 'Identifier',
+                name: 'resolve',
+                start: -1,
+                end: -1,
+              },
+              arguments: [],
+              optional: false,
+              start: -1,
+              end: -1,
+            };
+            resolveInjected = true;
+          } else {
+            // Neutralize other bare `LoadScreen.*` calls (e.g. `LoadScreen.init()`).
+            removeWrappingStatement(node, ancestors);
+          }
         }
       },
     });

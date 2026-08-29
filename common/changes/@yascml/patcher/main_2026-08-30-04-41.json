@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@yascml/patcher",
+      "comment": "Improve compatibility with modded SugarCube 2.x forks (e.g. Degrees of Lewdity): search the whole data-init guard block for the engine IIFE so unminified builds with prefix statements (window.TWINE1/window.DEBUG) patch correctly, and inject `resolve()` for `LoadScreen.unlock(...)` whether it is a bare statement or a comma-sequence element so `initEngine` resolves and the loader no longer hangs at `Loading game engine`",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@yascml/patcher"
+}

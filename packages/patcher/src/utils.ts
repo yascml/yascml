@@ -25,23 +25,31 @@ export const getRealScriptAST = (root: Program) => {
     (initTest.test.right.type !== 'Literal' || initTest.test.right.value !== 'loading')
   ) throw new Error('Invalid init test stamement');
 
-  const ifThenCode = (initTest.consequent as BlockStatement).body[0] as ExpressionStatement;
+  // The engine IIFE may not be the first statement of the guard block:
+  // e.g. unminified builds prepend `window.TWINE1` / `window.DEBUG` assignments
+  // (as in the Degrees of Lewdity SugarCube fork), so search the whole block.
+  const guardBody = (initTest.consequent as BlockStatement).body;
   let engineCode: CallExpression | null = null;
 
-  simple(ifThenCode, {
-    CallExpression(e) {
-      // The engine is wrapped in an IIFE invoked as `(function (window, document, jQuery, undefined) { ... })(window, window.document, jQuery)`,
-      // which may be prefixed by a unary operator (e.g. `!function (...) { ... }(...)`).
-      if (e.arguments.length < 3) return;
-      if ((e.arguments[0] as Identifier).name !== 'window') return;
-      if (e.arguments[1].type !== 'MemberExpression') return;
-      if ((e.arguments[2] as Identifier).name !== 'jQuery') return;
-      if (e.callee.type !== 'FunctionExpression') return;
-      if (e.callee.params.length < 3) return;
+  for (const stmt of guardBody) {
+    simple(stmt, {
+      CallExpression(e) {
+        if (engineCode) return;
 
-      engineCode = e;
-    },
-  });
+        // The engine is wrapped in an IIFE invoked as `(function (window, document, jQuery, undefined) { ... })(window, window.document, jQuery)`,
+        // which may be prefixed by a unary operator (e.g. `!function (...) { ... }(...)`).
+        if (e.arguments.length < 3) return;
+        if ((e.arguments[0] as Identifier).name !== 'window') return;
+        if (e.arguments[1].type !== 'MemberExpression') return;
+        if ((e.arguments[2] as Identifier).name !== 'jQuery') return;
+        if (e.callee.type !== 'FunctionExpression') return;
+        if (e.callee.params.length < 3) return;
+
+        engineCode = e;
+      },
+    });
+    if (engineCode) break;
+  }
   if (!engineCode)
     throw new Error('Cannot find engine code');
 
