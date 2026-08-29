@@ -8,8 +8,10 @@ import {
   findObjDefineProperties,
   findObjPreventExtensions,
   findObjFreeze,
+  findObjSeal,
   findPromiseCatch,
   findSCDefine,
+  findSCAssign,
   replaceFromParentNode,
   findInitExpression,
   createFunction,
@@ -23,6 +25,8 @@ import {
   FunctionDeclaration,
   FunctionExpression,
   MemberExpression,
+  NewExpression,
+  Node,
   ObjectExpression,
   ReturnStatement,
   SequenceExpression,
@@ -53,6 +57,45 @@ Object.defineProperty(window, '$SugarCube', {
     ${customExpose ? customExpose.join(',')  : ''}
   }),
 })`);
+
+/**
+ * Remove the statement that directly contains `node` from its enclosing block.
+ * Returns the removed statement, or `null` if none was found.
+ */
+const removeWrappingStatement = (_node: Node, ancestors: Node[]): Statement | null => {
+  for (let i = ancestors.length - 1; i >= 1; i--) {
+    const current = ancestors[i];
+    const parent = ancestors[i - 1];
+    if (parent.type === 'BlockStatement') {
+      const body = (parent as BlockStatement).body;
+      const index = body.findIndex(e => e === current);
+      if (index !== -1) {
+        body.splice(index, 1);
+        return current as Statement;
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * Check whether `chain` is a promise chain rooted at `new Promise(...)`,
+ * i.e. `new Promise(...).then(...).catch(...)` / `.finally(...)`.
+ */
+const isPromiseChainRoot = (chain: CallExpression): boolean => {
+  let root: Expression = chain;
+  while (root.type === 'CallExpression') {
+    const call = root as CallExpression;
+    if (call.callee.type !== 'MemberExpression') break;
+    const member = call.callee as MemberExpression;
+    if (member.property.type !== 'Identifier') break;
+    if (!['then', 'catch', 'finally'].includes(member.property.name)) break;
+    root = member.object as Expression;
+  }
+  if (root.type !== 'NewExpression') return false;
+  const callee = (root as NewExpression).callee;
+  return callee.type === 'Identifier' && callee.name === 'Promise';
+};
 
 /**
  * Patch the original SugarCube script, expose some internal variables and the initial function.
@@ -114,40 +157,75 @@ export const patchEngineScript = (
         replaceFromParentNode(parent, node, arg);
       }
 
+      // Replace `Object.seal({...})`
+      if (findObjSeal(node)) {
+        const arg = node.arguments[0] as Expression;
+        const parent = ancestors[ancestors.length - 2];
+        replaceFromParentNode(parent, node, arg);
+      }
+
       // Find & remove init function
       if (findInitExpression(node)) {
         const result = node.arguments[0] as FunctionExpression | ArrowFunctionExpression;
-        const parent = ancestors[ancestors.length - 2] as SequenceExpression;
-
-        const index = parent.expressions.findIndex(e => e === node);
-        parent.expressions.splice(index, 1);
         initFuncAST = result;
+
+        const parent = ancestors[ancestors.length - 2];
+        if ((parent as SequenceExpression).type === 'SequenceExpression') {
+          const index = (parent as SequenceExpression).expressions.findIndex(e => e === node);
+          (parent as SequenceExpression).expressions.splice(index, 1);
+        } else if (parent.type === 'ExpressionStatement') {
+          const block = ancestors[ancestors.length - 3] as BlockStatement;
+          const index = block.body.findIndex(e => e === parent);
+          if (index !== -1) block.body.splice(index, 1);
+        } else {
+          throw new Error(`Cannot remove init function, unexpected parent type: ${parent.type}`);
+        }
       }
     },
   });
 
   if (!initFuncAST)
     throw new Error('Cannot find engine init function');
-  
+
+  // Note: TS's CFA narrows `initFuncAST` to `never` here because it is assigned inside a
+  // closure (the ancestor walk), so we cast explicitly to recover the non-null type.
+  const initFunc = initFuncAST as FunctionExpression | ArrowFunctionExpression;
+  const initFuncBody = initFunc.body as BlockStatement;
+
   // Finds the real init code
   let initCodeAST: CallExpression | BlockStatement | null = null;
-  ancestor(initFuncAST, { // new Promise().then().catch()
-    CallExpression: (node) => {
-      if (!findPromiseCatch(node)) return;
-      initCodeAST = (node.callee as MemberExpression).object as CallExpression;
-    },
-  });
+
+  // Prefer the outermost promise chain: `new Promise(...).then(...).catch(...)`.
+  // Multiple `.catch()` calls may exist (e.g. nested in helpers), so pick the one
+  // closest to the init function root (shortest ancestor path) that chains to `new Promise`.
+  {
+    let bestDepth = Infinity;
+    ancestor(initFunc, {
+      CallExpression: (node, _, ancestors) => {
+        if (!findPromiseCatch(node)) return;
+        const chain = (node.callee as MemberExpression).object as CallExpression;
+        if (!isPromiseChainRoot(chain)) return;
+        if (ancestors.length < bestDepth) {
+          bestDepth = ancestors.length;
+          initCodeAST = chain;
+        }
+      },
+    });
+  }
 
   if (!initCodeAST) { // try {} catch {}
-    ancestor(initFuncAST, {
-      TryStatement: (node) => {
+    ancestor(initFunc, {
+      TryStatement: (node, _, ancestors) => {
+        // Only the top-level try/catch directly in the init function body.
+        const parent = ancestors[ancestors.length - 2];
+        if (parent !== initFuncBody) return;
         initCodeAST = node.block;
       },
     });
   }
 
   if (!initCodeAST)
-    throw new Error('Cannot find engine init code');
+    throw new Error('Cannot find engine init code (expected a top-level promise chain or try/catch in the init function)');
 
   { // Parse init code, remove `LoadScreen` calls
     const isPromise = (initCodeAST as Statement).type !== 'BlockStatement';
@@ -214,21 +292,25 @@ export const patchEngineScript = (
     });
   }
 
-  // If we found `Object.defineProperty(window, 'SugarCube', {...})` in init code, we extract it
-  let defineCodeAST: ExpressionStatement | null = null;
+  // If we found the `SugarCube` export inside the init code
+  // (`Object.defineProperty(window, 'SugarCube', {...})` or `window.SugarCube = {...}`),
+  // extract it to the top level so it is populated synchronously, before `initEngine` runs.
+  // Without this, e.g. on SugarCube 2.31.x, `window.SugarCube` stays an empty placeholder
+  // until the async init executes, breaking the loader.
+  const extractedStatements: Statement[] = [];
   ancestor(initCodeAST, {
     CallExpression: (node, _, ancestors) => {
       if (!findSCDefine(node)) return;
-
-      const _node = ancestors[ancestors.length - 2] as ExpressionStatement;
-      const parent = ancestors[ancestors.length - 3] as BlockStatement;
-      const index = parent.body.findIndex(e => e === _node);
-
-      defineCodeAST = _node;
-      parent.body.splice(index, 1);
-    }
+      const statement = removeWrappingStatement(node, ancestors);
+      if (statement) extractedStatements.push(statement);
+    },
+    AssignmentExpression: (node, _, ancestors) => {
+      if (!findSCAssign(node)) return;
+      const statement = removeWrappingStatement(node, ancestors);
+      if (statement) extractedStatements.push(statement);
+    },
   });
-  if (defineCodeAST) pushToASTBody(realAST, defineCodeAST);
+  if (extractedStatements.length > 0) pushToASTBody(realAST, ...extractedStatements);
 
   // Generate new init function
   let initFuncFinal: FunctionDeclaration | null = null;

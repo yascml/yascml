@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@yascml/patcher",
+      "comment": "Improve robustness across SugarCube 2.x versions: extract `window.SugarCube = ...` export out of the async init (fixes 2.31.x), strip `Object.seal` like freeze/preventExtensions, and select the init code deterministically with clearer errors",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@yascml/patcher"
+}

@@ -12,6 +12,9 @@ export const parseScript = (script: string) => (
 );
 
 export const getRealScriptAST = (root: Program) => {
+  if (root.body.length === 0)
+    throw new Error('Failed to find real script');
+
   const initTest = root.body[0];
   if (initTest.type !== 'IfStatement')
     throw new Error('Failed to find real script');
@@ -27,15 +30,14 @@ export const getRealScriptAST = (root: Program) => {
 
   simple(ifThenCode, {
     CallExpression(e) {
+      // The engine is wrapped in an IIFE invoked as `(function (window, document, jQuery, undefined) { ... })(window, window.document, jQuery)`,
+      // which may be prefixed by a unary operator (e.g. `!function (...) { ... }(...)`).
       if (e.arguments.length < 3) return;
       if ((e.arguments[0] as Identifier).name !== 'window') return;
       if (e.arguments[1].type !== 'MemberExpression') return;
       if ((e.arguments[2] as Identifier).name !== 'jQuery') return;
       if (e.callee.type !== 'FunctionExpression') return;
       if (e.callee.params.length < 3) return;
-      if ((e.callee.params[0] as Identifier).name !== 'window') return;
-      if ((e.callee.params[1] as Identifier).name !== 'document') return;
-      if ((e.callee.params[2] as Identifier).name !== 'jQuery') return;
 
       engineCode = e;
     },
@@ -83,6 +85,13 @@ export const findObjFreeze = (e: CallExpression) => (
   (e.callee.property as Identifier).name === 'freeze'
 );
 
+export const findObjSeal = (e: CallExpression) => (
+  e.arguments.length !== 0 &&
+  e.callee.type === 'MemberExpression' &&
+  (e.callee.object as Identifier).name === 'Object' &&
+  (e.callee.property as Identifier).name === 'seal'
+);
+
 export const findSCDefine = (e: CallExpression) => (
   e.arguments.length === 3 &&
   e.callee.type === 'MemberExpression' &&
@@ -90,6 +99,13 @@ export const findSCDefine = (e: CallExpression) => (
   (e.callee.property as Identifier).name === 'defineProperty' &&
   (e.arguments[0] as Identifier).name === 'window' &&
   (e.arguments[1] as Literal).value === 'SugarCube'
+);
+
+export const findSCAssign = (e: AssignmentExpression) => (
+  e.operator === '=' &&
+  e.left.type === 'MemberExpression' &&
+  (e.left.object as Identifier).name === 'window' &&
+  (e.left.property as Identifier).name === 'SugarCube'
 );
 
 export const findPromiseCatch = (e: CallExpression) => (
