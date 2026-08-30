@@ -1,6 +1,7 @@
 import { cloneDeep } from 'lodash';
 import { CacheRecord } from './cacheRecord';
 import { Logger } from '../types';
+import { buildLogger } from '../utils';
 
 export type StyleTextFileItem = {
   id: number;
@@ -34,17 +35,21 @@ const UserStyleFileReg = /\/\*\stwine-user-stylesheet\s#(\d+):\s"([^'"]+?)"\s\*\
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L177
  */
 export class SC2DataInfo {
+  /**
+   * Public logger, part of the SC2ML mod-facing data API.
+   */
+  readonly log: Logger = buildLogger();
+
   styleFileItems: CacheRecord<StyleTextFileItem>;
   scriptFileItems: CacheRecord<ScriptTextFileItem>;
   passageDataItems: CacheRecord<PassageDataItem>;
 
   constructor(
-    public log: Logger,
     public dataSource: string,
   ) {
-    this.styleFileItems = new CacheRecord<StyleTextFileItem>(this.log, this.dataSource, 'styleFileItems');
-    this.scriptFileItems = new CacheRecord<ScriptTextFileItem>(this.log, this.dataSource, 'scriptFileItems', true);
-    this.passageDataItems = new CacheRecord<PassageDataItem>(this.log, this.dataSource, 'passageDataItems');
+    this.styleFileItems = new CacheRecord<StyleTextFileItem>(this.dataSource, 'styleFileItems');
+    this.scriptFileItems = new CacheRecord<ScriptTextFileItem>(this.dataSource, 'scriptFileItems', true);
+    this.passageDataItems = new CacheRecord<PassageDataItem>(this.dataSource, 'passageDataItems');
   }
 
   clean() {
@@ -56,6 +61,20 @@ export class SC2DataInfo {
     this.scriptFileItems.destroy();
     this.passageDataItems.destroy();
   }
+
+  /**
+   * Deep-clone this data into a plain {@link SC2DataInfo} (the canonical "modify a copy"
+   * entry point used by mods).
+   *
+   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L206
+   */
+  cloneSC2DataInfo() {
+    const r = new SC2DataInfo(this.dataSource);
+    r.styleFileItems = cloneDeep(this.styleFileItems);
+    r.scriptFileItems = cloneDeep(this.scriptFileItems);
+    r.passageDataItems = cloneDeep(this.passageDataItems);
+    return r;
+  }
 }
 
 /**
@@ -65,7 +84,6 @@ export class SC2DataInfo {
 export class SC2DataInfoCache extends SC2DataInfo {
   /**
    * 
-   * @param log 
    * @param dataSource 
    * @param scriptNode 
    * @param styleNode 
@@ -73,13 +91,12 @@ export class SC2DataInfoCache extends SC2DataInfo {
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L221
    */
   constructor(
-    public log: Logger,
     public dataSource: string,
     public scriptNode: HTMLScriptElement[],
     public styleNode: HTMLStyleElement[],
     public passageDataNodes: HTMLElement[],
   ) {
-    super(log, dataSource);
+    super(dataSource);
 
     for (const node of styleNode) {
       const styleText = node.innerText;
@@ -130,22 +147,6 @@ export class SC2DataInfoCache extends SC2DataInfo {
       });
     }
     this.passageDataItems.fillMap();
-  }
-
-  /**
-   * 
-   * @returns 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L206
-   */
-  cloneSC2DataInfo() {
-    const r = new SC2DataInfo(
-      this.log,
-      this.dataSource,
-    );
-    r.styleFileItems = cloneDeep(this.styleFileItems);
-    r.scriptFileItems = cloneDeep(this.scriptFileItems);
-    r.passageDataItems = cloneDeep(this.passageDataItems);
-    return r;
   }
 
   destroy() {

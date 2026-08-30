@@ -69,8 +69,17 @@ export type LoaderStats = {
   logs: LogEntry[],
 };
 
+/**
+ * A hook called before a mod file is imported (and persisted), allowing e.g.
+ * `@yascml/sc2ml-compact` to pre-process SC2ML-format mods (boot.json) into
+ * files that the loader can import directly. Return the (possibly rebuilt) file
+ * to be imported and stored.
+ */
+export type ModImportPreprocess = (file: Blob) => Blob | Promise<Blob>;
+
 export type YASCML = {
   version: string,
   mods: ModList, // TODO
   stats: LoaderStats,
+  importPreprocess?: ModImportPreprocess,
 };

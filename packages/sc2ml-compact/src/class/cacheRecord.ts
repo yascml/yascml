@@ -1,4 +1,5 @@
 import { Logger } from '../types';
+import { buildLogger } from '../utils';
 
 const FilePathSliptReg = /[\\\/]{1,2}/;
 
@@ -6,13 +7,17 @@ const FilePathSliptReg = /[\\\/]{1,2}/;
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L177
  */
 export class CacheRecord<T extends { name: string, content: string }> {
+  /**
+   * Public logger, part of the SC2ML mod-facing data API.
+   */
+  readonly log: Logger = buildLogger();
+
   map: Map<string, T> = new Map();
   items: T[] = [];
   noName: T[] = [];
   noPathCache?: Map<string, string[]> = new Map();
 
   constructor(
-    public log: Logger,
     public dataSource: string,
     public cacheRecordName: string,
     public needBuildNoPathCache: boolean = false,
@@ -156,10 +161,9 @@ export class CacheRecord<T extends { name: string, content: string }> {
    * Replace data from another {@link CacheRecord}
    * 
    * @param {CacheRecord} c - Another {@link CacheRecord}
-   * @param {boolean} [_noWarning = false] - Don't print warning to log
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataInfoCache.ts#L121
    */
-  replaceMerge(c: CacheRecord<T>, _noWarning: boolean = false) {
+  replaceMerge(c: CacheRecord<T>) {
     for (const item of c.items) {
       this.map.set(item.name, item);
     }

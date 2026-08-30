@@ -17,12 +17,16 @@
     "vite-plugin-cp": "~6.0.3",
     "vite-plugin-zip-pack": "~1.2.4",
     "@types/lodash": "~4.17.20",
+    "@types/semver": "~7.7.1",
     "@yascml/hook": "workspace:*"
   },
   "dependencies": {
     "@yascml/utils": "workspace:*",
     "lodash": "~4.17.21",
     "idb-keyval": "~6.2.2",
-    "idb": "~8.0.3"
+    "idb": "~8.0.3",
+    "jszip": "~3.10.1",
+    "json5": "~2.2.3",
+    "semver": "~7.7.2"
   }
 }

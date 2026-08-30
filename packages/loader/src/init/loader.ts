@@ -31,6 +31,7 @@ export const initLoader = async () => {
     value: Object.seal(Object.assign(Object.create(null), {
       version: __LOADER_VERSION__,
       mods: new ModList(),
+      importPreprocess: (void 0),
       stats: Object.create(null, {
         gameName: {
           get() { return unescapeHTML(document.querySelector<HTMLElement>('tw-storydata')!.getAttribute('name')!) },

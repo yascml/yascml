@@ -1,13 +1,29 @@
 import { ModLoader } from './loader';
-import { SC2DataInfoCache } from './dataInfo';
+import { SC2DataInfo, SC2DataInfoCache } from './dataInfo';
 import { HtmlTagSrcHook } from './htmlSrcHook';
 import { ModLoaderController } from './modLoadController';
-import { buildLogger } from '../utils';
+import { ModUtils } from './modUtils';
 import { _Window } from '../types';
+import { ModInfo, Sc2mlCacheData } from '../mod/modInfo';
+import { buildModInfoFromCache, parseModZip, Sc2mlCacheFilePath } from '../mod/modZip';
+import { normalMergeSC2DataInfoCache, replaceMergeSC2DataInfoCache } from '../merge';
+import { ReplacePatcher } from '../replacePatcher';
+import { check } from '../dependenceChecker';
+import { simulateMergeSC2DataInfoCache, SimulateMergeResult } from '../simulateMerge';
+import { executeScript, injectEarlyScript, loadStyle } from '../script';
+import { Sc2EventTracer } from '../eventTracer';
 
 /**
  * The main entry of SugarCube-2-ModLoader
- * 
+ *
+ * This port does NOT rewrite the game's `tw-storydata` DOM. Instead it:
+ *  - parses SC2ML mods into in-memory `ModInfo`s,
+ *  - auto-runs their `inject_early` / `earlyload` scripts,
+ *  - merges mod data + applies replace patches in memory,
+ *  - exposes the merged (new/overridden) passages through a single
+ *    `YASCHook.passage` middleware, so the engine sees them as virtual passages
+ *    without ever touching the stored game-data DOM.
+ *
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L23
  */
 export class SC2DataManager {
@@ -15,43 +31,65 @@ export class SC2DataManager {
   readonly modLoader: ModLoader;
   readonly modLoadController: ModLoaderController;
   readonly htmlTagSrcHook: HtmlTagSrcHook;
+  readonly modUtils: ModUtils;
+  readonly eventTracer: Sc2EventTracer;
 
   /**
    * Is this data manager has been initialized?
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L247
    */
   startInitOk = false;
-  
-  /**
-   * Game data modified by mods.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L302
-   */
-  cSC2DataInfoAfterPatchCache?: SC2DataInfoCache;
 
   /**
-   * Original game data.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L133
+   * Merged game data (origin + mods, replace patches applied).
+   *
+   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L302
+   */
+  cSC2DataInfoAfterPatchCache?: SC2DataInfo;
+
+  /**
+   * Original game data (read-only snapshot of the story data DOM).
    */
   originSC2DataInfoCache?: SC2DataInfoCache;
+
+  /**
+   * Per-mod conflict results (name-sets an earlier mod's data would be overwritten by).
+   */
+  conflictResult: SimulateMergeResult[] = [];
+
+  /**
+   * Effective passage content contributed by mods (new or overridden passages),
+   * keyed by passage name. Served to the engine via the passage middleware.
+   */
+  modPassageDataMap: Map<string, string> = new Map();
+
+  /**
+   * The name of the mod whose script is currently executing (for `getNowRunningModName`).
+   */
+  runningModName?: string;
+
+  private passageMiddlewareRegistered = false;
 
   constructor(window: _Window) {
     this.thisWin = window;
     this.modLoader = new ModLoader(this.thisWin);
+    this.modUtils = new ModUtils(this, this.thisWin);
     this.modLoadController = new ModLoaderController(this);
     this.htmlTagSrcHook = new HtmlTagSrcHook(this);
+    this.eventTracer = new Sc2EventTracer(this);
   }
 
-  conflictResult = []; // TODO
+  getModUtils() {
+    return this.modUtils;
+  }
+
+  getEventTracer() {
+    return this.eventTracer;
+  }
 
   /**
    * Clear {@link originSC2DataInfoCache|SC2DataManager.originSC2DataInfoCache}.
    * We won't clear {@link cSC2DataInfoAfterPatchCache|SC2DataManager.cSC2DataInfoAfterPatchCache} since
    * we need to use these data later.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L143
    */
   cleanAllCacheAfterModLoadEnd() {
     if (this.originSC2DataInfoCache) {
@@ -63,13 +101,9 @@ export class SC2DataManager {
 
   /**
    * Read current game data and return a {@link SC2DataInfoCache} based on it.
-   * 
-   * @returns {SC2DataInfoCache}
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L118
    */
   createNewSC2DataInfoFromNow() {
     return new SC2DataInfoCache(
-      buildLogger(),
       'orgin', // https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L121
       Array.from(this.scriptNode!),
       Array.from(this.styleNode!),
@@ -77,9 +111,6 @@ export class SC2DataManager {
     );
   }
 
-  /**
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L135
-   */
   earlyResetSC2DataInfoCache() {
     this.initSC2DataInfoCache();
     this.flushAfterPatchCache();
@@ -87,21 +118,17 @@ export class SC2DataManager {
 
   /**
    * (Re)create {@link cSC2DataInfoAfterPatchCache|SC2DataManager.cSC2DataInfoAfterPatchCache}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L326
+   *
+   * In this no-DOM port the after-patch cache is maintained in memory, so flushing
+   * re-derives the virtual passage table rather than re-reading the DOM.
    */
   flushAfterPatchCache() {
-    if (this.cSC2DataInfoAfterPatchCache) {
-      this.cSC2DataInfoAfterPatchCache.destroy();
-      this.cSC2DataInfoAfterPatchCache = (void 0);
-    }
-    this.getSC2DataInfoAfterPatch();
+    this.rebuildModPassageFromAfterPatch();
+    return this.cSC2DataInfoAfterPatchCache;
   }
 
   /**
    * Get {@link htmlTagSrcHook|SC2DataManager.htmlTagSrcHook}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L235
    */
   getHtmlTagSrcHook() {
     return this.htmlTagSrcHook;
@@ -109,8 +136,6 @@ export class SC2DataManager {
 
   /**
    * Get {@link modLoadController|SC2DataManager.modLoadController}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L52
    */
   getModLoadController() {
     return this.modLoadController;
@@ -118,37 +143,56 @@ export class SC2DataManager {
 
   /**
    * Get {@link modLoader|SC2DataManager.modLoader}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L183
    */
   getModLoader() {
     return this.modLoader;
   }
 
   /**
-   * Create {@link cSC2DataInfoAfterPatchCache|SC2DataManager.cSC2DataInfoAfterPatchCache}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L308
+   * Get {@link cSC2DataInfoAfterPatchCache|SC2DataManager.cSC2DataInfoAfterPatchCache}.
    */
   getSC2DataInfoAfterPatch() {
     this.initSC2DataInfoCache();
     if (!this.cSC2DataInfoAfterPatchCache) {
-      this.cSC2DataInfoAfterPatchCache = new SC2DataInfoCache(
-        buildLogger(),
-        'orgin',
-        Array.from(this.scriptNode!),
-        Array.from(this.styleNode!),
-        this.passageDataNodeList!,
-      );
+      // Fallback before/without a merge: a clone of the origin snapshot.
+      this.cSC2DataInfoAfterPatchCache = this.originSC2DataInfoCache!.cloneSC2DataInfo();
     }
     return this.cSC2DataInfoAfterPatchCache;
   }
 
   /**
+   * Replace the in-memory after-patch cache and refresh the virtual passage table.
+   * (No-DOM equivalent of a full `replaceFollowSC2DataInfo` write.)
+   */
+  setAfterPatchCache(cache: SC2DataInfo) {
+    if (this.cSC2DataInfoAfterPatchCache && this.cSC2DataInfoAfterPatchCache !== cache) {
+      this.cSC2DataInfoAfterPatchCache.destroy();
+    }
+    this.cSC2DataInfoAfterPatchCache = cache;
+    this.rebuildModPassageFromAfterPatch();
+    return this.cSC2DataInfoAfterPatchCache;
+  }
+
+  /**
+   * Update a single passage in the in-memory after-patch cache and the virtual passage table.
+   */
+  updateModPassageData(name: string, content: string, tags: string[] = [], pid: number = 0) {
+    const cache = this.getSC2DataInfoAfterPatch();
+    cache.passageDataItems.items = cache.passageDataItems.items.filter(i => i.name !== name);
+    cache.passageDataItems.items.push({ id: pid, name, tags, content });
+    cache.passageDataItems.fillMap();
+    this.modPassageDataMap.set(name, content);
+  }
+
+  /**
+   * Get {@link conflictResult}.
+   */
+  getConflictResult(): SimulateMergeResult[] {
+    return this.conflictResult;
+  }
+
+  /**
    * Get (or create) {@link originSC2DataInfoCache|SC2DataManager.originSC2DataInfoCache}.
-   * 
-   * @returns {SC2DataInfoCache}
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L170
    */
   getSC2DataInfoCache() {
     this.initSC2DataInfoCache();
@@ -157,13 +201,10 @@ export class SC2DataManager {
 
   /**
    * Create {@link originSC2DataInfoCache|SC2DataManager.originSC2DataInfoCache}.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L152
    */
   initSC2DataInfoCache() {
     if (!this.originSC2DataInfoCache) {
       this.originSC2DataInfoCache = new SC2DataInfoCache(
-        buildLogger(),
         'orgin',
         Array.from(this.scriptNode!),
         Array.from(this.styleNode!),
@@ -173,60 +214,219 @@ export class SC2DataManager {
   }
 
   /**
-   * Generate a `<tw-passagedata>` DOM with given passage data.
-   * 
-   * @deprecated We don't need this so it's not implemented.
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L447
+   * Initialize this data manager (runs during the loader's preload phase, before the engine boots).
    */
-  makePassageNode() {}
-
-  /**
-   * Generate user script DOM with given script data.
-   * 
-   * @deprecated We don't need this so it's not implemented.
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L480
-   */
-  makeScriptNode() {}
-
-  /**
-   * Generate user style DOM with given style data.
-   * 
-   * @deprecated We don't need this so it's not implemented.
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L467
-   */
-  makeStyleNode() {}
-
-  /**
-   * Patch modified game data to game DOMs.
-   * 
-   * @deprecated We don't need this so it's not implemented.
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L355
-   */
-  patchModToGame() {}
-  
-  /**
-   * Remove exists passage DOMs and add given passage DOMs.
-   * 
-   * @deprecated We don't need this so it's not implemented.
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L525
-   */
-  rePlacePassage() {}
-
-  /**
-   * Initialize this data manager.
-   * 
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/SC2DataManager.ts#L249
-   */
-  startInit() {
+  async startInit() {
     if (this.startInitOk) return;
     this.startInitOk = true;
 
     this.initSC2DataInfoCache();
 
-    // ... Load mods
-    // ... Check mod dependencies
-    // ... Update mod conflict results
-    // ... Patching modified game data to DOM
+    const mods = await this.collectMods();
+    this.modLoader.setModList(mods);
+
+    // Inject `inject_early` scripts as DOM scripts (before engine start).
+    for (const mod of mods) {
+      for (const [ fileName, content ] of mod.scriptFileList_inject_early) {
+        await this.modLoadController.InjectEarlyLoad_start(mod.name, fileName);
+        injectEarlyScript(content, { modName: mod.name, filename: fileName, stage: 'InjectEarlyLoad' });
+        await this.modLoadController.InjectEarlyLoad_end(mod.name, fileName);
+      }
+    }
+
+    // Run `earlyload` scripts.
+    for (const mod of mods) {
+      for (const [ fileName, content ] of mod.scriptFileList_earlyload) {
+        await this.modLoadController.EarlyLoad_start(mod.name, fileName);
+        this.runningModName = mod.name;
+        try {
+          await executeScript(content);
+        } catch (e) {
+          console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
+        } finally {
+          this.runningModName = (void 0);
+        }
+        await this.modLoadController.EarlyLoad_end(mod.name, fileName);
+      }
+    }
+
+    // Validate dependencies across the final mod order.
+    if (!check(mods)) {
+      console.warn('sc2ml-compact: some mod dependencies are not satisfied');
+    }
+
+    // Detect per-mod conflicts (dry-run merge).
+    this.updateConflictResult(mods);
+
+    // Merge mod data + apply replace patches in memory, build the virtual passage table.
+    this.buildMergedData(mods);
+
+    // Inject mod styles as standalone `<style>` elements (additive).
+    for (const mod of mods) {
+      for (const item of mod.cache.styleFileItems.items) {
+        loadStyle(item.content, { modName: mod.name, filename: item.name });
+      }
+    }
+
+    // Single injection point: expose mod-provided passages to the engine.
+    this.registerPassageMiddleware();
+
+    // Subscribe to engine-native SC2 runtime events (`:storyready`, `:passage*`).
+    this.eventTracer.init();
+
+    // User scripts (scriptFileList) + `preload` lists run after the engine boots.
+  };
+
+  /**
+   * Run post-engine scripts (`scriptFileList` user scripts, then `scriptFileList_preload`).
+   * Called from the postload phase.
+   */
+  async runPostloadScripts() {
+    const mods = this.modLoader.getModCacheArray();
+
+    // User scripts (would be `text/twine-javascript` in a DOM rewrite).
+    for (const mod of mods) {
+      for (const item of mod.cache.scriptFileItems.items) {
+        await this.modLoadController.Load_start(mod.name, item.name);
+        this.runningModName = mod.name;
+        try {
+          await executeScript(item.content);
+        } catch (e) {
+          console.error(`sc2ml-compact: user script error [${mod.name}] [${item.name}]`, e);
+        } finally {
+          this.runningModName = (void 0);
+        }
+        await this.modLoadController.Load_end(mod.name, item.name);
+      }
+    }
+
+    // Preload scripts.
+    for (const mod of mods) {
+      for (const [ fileName, content ] of mod.scriptFileList_preload) {
+        await this.modLoadController.Load_start(mod.name, fileName);
+        this.runningModName = mod.name;
+        try {
+          await executeScript(content);
+        } catch (e) {
+          console.error(`sc2ml-compact: preload script error [${mod.name}] [${fileName}]`, e);
+        } finally {
+          this.runningModName = (void 0);
+        }
+        await this.modLoadController.Load_end(mod.name, fileName);
+      }
+    }
+
+    await this.modLoadController.ModLoaderLoadEnd();
+  };
+
+  /**
+   * Collect and parse all enabled/suitable SC2ML mods from the YASCML loader.
+   * Uses the embedded pre-parse cache when available; falls back to a live parse.
+   */
+  private async collectMods(): Promise<ModInfo[]> {
+    const result: ModInfo[] = [];
+    for (const mod of this.thisWin.YASCML.mods) {
+      if (!mod.enabled || !mod.suitable || !mod.zip) continue;
+
+      try {
+        let info: ModInfo | null = null;
+        const cacheFile = mod.zip.file(Sc2mlCacheFilePath);
+        if (cacheFile) {
+          const cache = JSON.parse(await cacheFile.async('string')) as Sc2mlCacheData;
+          info = await buildModInfoFromCache(mod.zip, cache);
+        }
+        if (!info) {
+          info = await parseModZip(mod.zip);
+        }
+        result.push(info);
+      } catch (e) {
+        // Not a SC2ML mod (no boot.json) or invalid mod; skip silently with a warning.
+        console.warn(`sc2ml-compact: skip mod "${mod.name}" (${(e as Error).message})`);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Update {@link conflictResult} via a dry-run simulate merge of all mods.
+   */
+  private updateConflictResult(mods: ModInfo[]) {
+    if (mods.length === 0) {
+      this.conflictResult = [];
+      return;
+    }
+    const origin = this.getSC2DataInfoCache();
+    this.conflictResult = simulateMergeSC2DataInfoCache(origin, ...mods.map(m => m.cache));
+  }
+
+  /**
+   * Merge mod data over the origin snapshot (scripts/styles replace, passages replace),
+   * apply every mod's replace patches, and build the virtual passage table.
+   */
+  private buildMergedData(mods: ModInfo[]) {
+    const origin = this.getSC2DataInfoCache();
+
+    const em = normalMergeSC2DataInfoCache(
+      new SC2DataInfo('EmptyMod'),
+      ...mods.map(m => m.cache),
+    );
+    const merged = replaceMergeSC2DataInfoCache(origin.cloneSC2DataInfo(), em);
+
+    for (const mod of mods) {
+      for (const { fileName, patchInfo } of mod.replacePatchers) {
+        new ReplacePatcher(mod.name, fileName, patchInfo).applyReplacePatcher(merged);
+      }
+    }
+
+    this.cSC2DataInfoAfterPatchCache = merged;
+    this.rebuildModPassageFromAfterPatch();
+  }
+
+  /**
+   * Rebuild the virtual passage table from the after-patch cache: any passage whose
+   * content differs from the origin snapshot (or that doesn't exist in origin) is
+   * served by the middleware; untouched origin passages pass through.
+   */
+  private rebuildModPassageFromAfterPatch() {
+    const origin = this.originSC2DataInfoCache;
+    const merged = this.cSC2DataInfoAfterPatchCache;
+    this.modPassageDataMap.clear();
+    if (!merged) return;
+    for (const item of merged.passageDataItems.items) {
+      const originItem = origin?.passageDataItems.map.get(item.name);
+      if (!originItem || originItem.content !== item.content) {
+        this.modPassageDataMap.set(item.name, item.content);
+      }
+    }
+  }
+
+  /**
+   * Register the single passage middleware that serves mod-provided passages to the engine.
+   * Only fires for names contributed/patched by mods; origin passages pass through.
+   */
+  private registerPassageMiddleware() {
+    if (this.passageMiddlewareRegistered) return;
+    this.passageMiddlewareRegistered = true;
+
+    window.YASCHook.passage.hook((context, next) => {
+      const content = this.modPassageDataMap.get(context.name);
+      if (content !== (void 0)) {
+        context.text = content;
+      }
+      return next();
+    });
+  }
+
+  /**
+   * Rebuild merged data + conflict results from the current mod list (used after a
+   * runtime lazy-register). Re-runs the merge/replace/conflict pipeline without
+   * re-snapshotting the DOM or re-running scripts.
+   */
+  rebuildAll() {
+    const mods = this.modLoader.getModCacheArray();
+    this.updateConflictResult(mods);
+    this.buildMergedData(mods);
+    this.rebuildModPassageFromAfterPatch();
   }
 
   /**

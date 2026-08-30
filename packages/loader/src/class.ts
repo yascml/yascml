@@ -11,9 +11,14 @@ export class ModList extends Array<ModMetaFull> {
   }
 
   async add(file: string | Blob) {
-    const mod = await importMod(file);
-    await IDB.set(mod.id, file);
-  
+    let input = file;
+    if (typeof input !== 'string' && window.YASCML?.importPreprocess) {
+      input = await window.YASCML.importPreprocess(input);
+    }
+
+    const mod = await importMod(input);
+    await IDB.set(mod.id, input);
+
     const oldModIndex = this.findIndex(e => e.id === mod.id);
     if (oldModIndex === -1) {
       mod.new = true;

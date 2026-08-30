@@ -292,12 +292,14 @@ export class ModLoaderController implements ModLoaderControllerCallback {
   }
 
   /**
-   * Save the mod to IndexedDB.
-   * 
-   * @todo Implement this as `YASCML.api.mod.add`
+   * Save the mod to IndexedDB (delegates to the YASCML loader's `YASCML.mods.add`).
+   *
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L390
    */
-  addModIndexDB() {}
+  async addModIndexDB(data?: Blob | string) {
+    if (data === undefined) return;
+    await this.gSC2DataManager.thisWin.YASCML.mods.add(data);
+  }
 
   /**
    * Save the mod to LocalStorage.
@@ -363,12 +365,13 @@ export class ModLoaderController implements ModLoaderControllerCallback {
   }
 
   /**
-   * Get all mods stored in IndexedDB.
-   * 
-   * @todo Implement this as `YASCML.mods`
+   * Get all mods stored in IndexedDB (delegates to `YASCML.mods`).
+   *
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L382
    */
-  async listModIndexDB() { return []; }
+  async listModIndexDB() {
+    return this.gSC2DataManager.thisWin.YASCML.mods.map(m => m.id);
+  }
 
   /**
    * Get all mods stored in LocalStorage.
@@ -419,11 +422,11 @@ export class ModLoaderController implements ModLoaderControllerCallback {
 
   /**
    * Remove a mod from IndexedDB.
-   * 
-   * @todo Implement this as `YASCML.api.mod.remove`
+   *
+   * @todo YASCML's loader has no public mod-removal API yet; a removal hook is needed.
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L394
    */
-  removeModIndexDB() {}
+  async removeModIndexDB(_modId?: string) {}
 
   /**
    * Remove a mod from LocalStorage.

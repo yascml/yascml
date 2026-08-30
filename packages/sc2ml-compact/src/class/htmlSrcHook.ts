@@ -1,4 +1,6 @@
 import { SC2DataManager } from './dataManager';
+import { Logger } from '../types';
+import { buildLogger } from '../utils';
 
 type HookFnFull<R = boolean> = ((el: HTMLImageElement | HTMLElement, src: string, field: string) => R | Promise<R>);
 type HookFn<R = unknown> = ((src: string) => R | Promise<R>);
@@ -6,12 +8,19 @@ type HookFnSync<R = unknown> = (src: string) => R;
 
 export class HtmlTagSrcHook {
   readonly pSC2DataManager: SC2DataManager;
+  /**
+   * Public logger, part of the SC2ML mod-facing API.
+   *
+   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/master/src/BeforeSC2/HtmlTagSrcHook.ts
+   */
+  readonly logger: Logger;
   private hooks = new Map<string, HookFnFull>();
   private hooksReturned = new Map<string, HookFn<[ boolean, string ]>>();
   private hooksCheckExists = new Map<string, HookFnSync<boolean | undefined>>();
 
   constructor(dataManager: SC2DataManager) {
     this.pSC2DataManager = dataManager;
+    this.logger = buildLogger();
 
     window.YASCHook.resources.image.hook(this.handleHook.bind(this));
   }
