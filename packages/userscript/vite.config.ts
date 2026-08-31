@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
             // Note that we can't load this into editor's test/preview game,
             // this is just for a demonstration
             'https://twinery.org/2*',
+            // Will run at EVERY HTML games on itch.io
+            'https://html-classic.itch.zone/html*',
           ],
           'require': externalRequire,
           'run-at': 'document-start',
@@ -57,7 +59,14 @@ export default defineConfig(({ mode }) => {
           'grant': 'none',
         },
         generate: ({ userscript }) => ([
-            userscript,
+            userscript.replace(
+              '// ==/UserScript==',
+              [
+                // A ScriptCat feature for injecting script more earlier
+                '// @early-start',
+                '// ==/UserScript=='
+              ].join('\n')
+            ),
             '',
             '// This is a compressed version of YASCML, include loader and patcher',
             '// You can view the source code at: https://github.com/yascml/yascml',
