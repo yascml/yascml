@@ -36,7 +36,7 @@ export const readFileAsString = (file: Blob) => new Promise<string>((res, rej) =
 /**
  * Can this page load `blob:`?
  * 
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
 export const canLoadBlob = () => new Promise<boolean>((res) => {
   if (isBlobAllowed !== null) return res(isBlobAllowed);

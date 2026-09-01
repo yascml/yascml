@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { ModList } from './class';
+import { executeScript, loadStyle } from './utils';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
@@ -69,6 +70,11 @@ export type LoaderStats = {
   logs: LogEntry[],
 };
 
+export type LoaderUtils = {
+  executeScript: typeof executeScript,
+  loadStyle: typeof loadStyle,
+};
+
 /**
  * A hook called before a mod file is imported (and persisted), allowing e.g.
  * `@yascml/sc2ml-compact` to pre-process SC2ML-format mods (boot.json) into
@@ -81,5 +87,6 @@ export type YASCML = {
   version: string,
   mods: ModList, // TODO
   stats: LoaderStats,
+  utils: LoaderUtils,
   importPreprocess?: ModImportPreprocess,
 };

@@ -6,7 +6,7 @@ import { ModList } from '../class';
 import { changeSplashText } from '../splash';
 import { Logs } from '../patcher/console';
 import { importMod } from '../importer';
-import { isBlobAllowed, unescapeHTML, sortMods, isModSuitable } from '../utils';
+import { isBlobAllowed, unescapeHTML, executeScript, loadStyle, sortMods, isModSuitable } from '../utils';
 import { YASCML } from '../types';
 
 declare global {
@@ -50,6 +50,10 @@ export const initLoader = async () => {
         logs: {
           get() { return Logs },
         },
+      }),
+      utils: Object.create(null, {
+        executeScript: { value: executeScript },
+        loadStyle: { value: loadStyle },
       }),
     } as YASCML)),
   });
