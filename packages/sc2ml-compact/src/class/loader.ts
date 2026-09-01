@@ -1,8 +1,9 @@
 import { _Window, Logger } from '../types';
 import { buildLogger } from '../utils';
 import type { ModInfo } from '../mod/modInfo';
-import { simulateMergeSC2DataInfoCache } from '../simulateMerge';
+import { SC2DataInfo } from './dataInfo';
 import { SC2ModZip } from './modZip';
+import type { SC2DataManager } from './dataManager';
 
 export type ModOrderItem = {
   name: string,
@@ -11,6 +12,7 @@ export type ModOrderItem = {
 };
 
 export class ModLoader {
+  readonly gSC2DataManager: SC2DataManager;
   readonly thisWin: _Window;
   /**
    * Public logger, part of the SC2ML mod-facing API.
@@ -25,8 +27,9 @@ export class ModLoader {
   private modList: ModInfo[] = [];
   private modZipMap = new Map<string, SC2ModZip>();
 
-  constructor(window: _Window) {
-    this.thisWin = window;
+  constructor(gSC2DataManager: SC2DataManager) {
+    this.gSC2DataManager = gSC2DataManager;
+    this.thisWin = gSC2DataManager.thisWin;
     this.logger = buildLogger();
   }
 
@@ -99,13 +102,6 @@ export class ModLoader {
     return mod ? { name: mod.name, mod, from: 'Local' } : (void 0);
   }
 
-  /**
-   * Get the parsed SC2ML mod whose name (or alias) matches `modName`.
-   */
-  getModCacheByNameOneModInfo(modName: string): ModInfo | undefined {
-    return this.getModCacheByAliseOne(modName)?.mod;
-  }
-
   getModByNameOne(modName: string): ModOrderItem | undefined {
     return this.getModCacheByAliseOne(modName);
   }
@@ -126,9 +122,10 @@ export class ModLoader {
   }
 
   checkModConflictList() {
-    if (this.modList.length === 0) return [];
-    return simulateMergeSC2DataInfoCache(...this.modList.map(mod => mod.cache)).map((result, index) => ({
-      mod: this.modList[index].cache,
+    // Delegate to the data manager so the result is consistent with
+    // `modUtils.getModConflictInfo()` (origin-inclusive).
+    return this.gSC2DataManager.getConflictResult().map((result, index) => ({
+      mod: this.modList[index]?.cache ?? new SC2DataInfo(result.dataSource),
       result,
     }));
   }

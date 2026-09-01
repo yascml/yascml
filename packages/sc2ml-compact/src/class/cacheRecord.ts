@@ -44,7 +44,7 @@ export class CacheRecord<T extends { name: string, content: string }> {
     this.noPathCache = new Map();
 
     for (const k of this.map.keys()) {
-      const n =this.getNoPathNameFromString(k);
+      const n = this.getNoPathNameFromString(k);
       if (!this.noPathCache.has(n)) {
         this.noPathCache.set(n, [k]);
       } else {

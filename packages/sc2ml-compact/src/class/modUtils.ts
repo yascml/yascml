@@ -237,7 +237,7 @@ export class ModUtils {
    * Lazy-register a new mod zip at runtime (no ModPack support; plain zips only).
    */
   async lazyRegisterNewModZipData(data: Blob | ArrayBuffer | Uint8Array, _options?: unknown) {
-      console.log('lazyRegisterNewModZipData', data);
+    console.log('lazyRegisterNewModZipData', data);
     try {
       const zip = await JSZip.loadAsync(data);
       const mod = await parseModZip(zip);
@@ -248,6 +248,7 @@ export class ModUtils {
       }
       mods.push(mod);
       this.pSC2DataManager.getModLoader().setModList(mods);
+      await this.pSC2DataManager.runModPreloadScripts(mod);
       this.pSC2DataManager.rebuildAll();
       return mod;
     } catch (e) {

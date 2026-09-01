@@ -1,4 +1,5 @@
 import { buildLogger } from '../utils';
+import type { Logger } from '../types';
 import type { SC2DataManager } from './dataManager';
 import type JSZip from 'jszip';
 import type { ModBootJson } from '../mod/bootJson';
@@ -98,51 +99,8 @@ export interface ModLoaderControllerCallback {
 export type LifeTimeCircleHook = Partial<ModLoaderControllerCallback>;
 
 /**
- * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L102
- */
-const ModLoadControllerCallback_PatchHook = [
-  'PatchModToGame_start',
-  'PatchModToGame_end',
-] as const;
-
-/**
- * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L106
- */
-const ModLoadControllerCallback_ModLoader = [
-  'ModLoaderLoadEnd',
-] as const;
-
-/**
- * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L109
- */
-const ModLoadControllerCallback_ReplacePatch = [
-  'ReplacePatcher_start',
-  'ReplacePatcher_end',
-] as const;
-
-/**
- * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L118
- */
-const ModLoadControllerCallback_ScriptLoadHook = [
-  'InjectEarlyLoad_start',
-  'InjectEarlyLoad_end',
-  'EarlyLoad_start',
-  'EarlyLoad_end',
-  'Load_start',
-  'Load_end',
-] as const;
-
-/**
- * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L126
- */
-const ModLoadControllerCallback_ScriptLazyLoadHook = [
-  'LazyLoad_start',
-  'LazyLoad_end',
-] as const;
-
-/**
  * A bunch of life-cycle hooks for mod to use.
- * 
+ *
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L144
  */
 export class ModLoaderController implements ModLoaderControllerCallback {
@@ -150,52 +108,14 @@ export class ModLoaderController implements ModLoaderControllerCallback {
 
   /**
    * Life-cycle hooks defined by mods.
-   * 
+   *
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L333
    */
   private lifeTimeCircleHookTable: Map<string, LifeTimeCircleHook> = new Map<string, LifeTimeCircleHook>();
 
-  /**
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L78
-   */
   readonly logInfo: (...args: any[]) => void;
-
-  /**
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L83
-   */
   readonly logWarning: (...args: any[]) => void;
-
-  /**
-   * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L73
-   */
   readonly logError: (...args: any[]) => void;
-
-  // All these functions down below are life-cycle hooks. For some reason they are being defined in constructor.
-  InjectEarlyLoad_start!: (modName: string, fileName: string) => Promise<any>;
-
-  InjectEarlyLoad_end!: (modName: string, fileName: string) => Promise<any>;
-
-  EarlyLoad_start!: (modName: string, fileName: string) => Promise<any>;
-
-  EarlyLoad_end!: (modName: string, fileName: string) => Promise<any>;
-
-  LazyLoad_start!: (modName: string) => Promise<any>;
-
-  LazyLoad_end!: (modName: string) => Promise<any>;
-
-  Load_start!: (modName: string, fileName: string) => Promise<any>;
-
-  Load_end!: (modName: string, fileName: string) => Promise<any>;
-
-  PatchModToGame_start!: () => Promise<any>;
-
-  PatchModToGame_end!: () => Promise<any>;
-
-  ReplacePatcher_start!: (modName: string, fileName: string) => Promise<any>;
-
-  ReplacePatcher_end!: (modName: string, fileName: string) => Promise<any>;
-
-  ModLoaderLoadEnd!: () => Promise<any>;
 
   constructor(gSC2DataManager: SC2DataManager) {
     this.gSC2DataManager = gSC2DataManager;
@@ -204,81 +124,77 @@ export class ModLoaderController implements ModLoaderControllerCallback {
     this.logInfo = logger.log;
     this.logWarning = logger.warn;
     this.logError = logger.error;
+  }
 
-    ModLoadControllerCallback_ScriptLoadHook.forEach((T) => {
-      this[T] = async (modName: string, fileName: string) => {
-        for (const [id, hook] of this.lifeTimeCircleHookTable) {
-          try {
-            if (hook[T]) {
-              await hook[T]!.apply(hook, [modName, fileName]);
-            }
-          } catch (e: any | Error) {
-            this.logError(`An error occurred when running hook: ${id}:${T}`);
-            this.logError(e);
-          }
+  /**
+   * Fan a lifecycle event out to every registered hook set.
+   */
+  private async emit<K extends keyof ModLoaderControllerCallback>(key: K, ...args: any[]) {
+    for (const [id, hook] of this.lifeTimeCircleHookTable) {
+      try {
+        const fn = hook[key];
+        if (fn) {
+          await (fn as (...a: any[]) => any).apply(hook, args);
         }
-      };
-    });
+      } catch (e) {
+        this.logError(`An error occurred when running hook: ${id}:${key}`);
+        this.logError(e);
+      }
+    }
+  }
 
-    ModLoadControllerCallback_ScriptLazyLoadHook.forEach((T) => {
-      this[T] = async (modName: string) => {
-        for (const [id, hook] of this.lifeTimeCircleHookTable) {
-          try {
-            if (hook[T]) {
-              await hook[T]!.apply(hook, [modName]);
-            }
-          } catch (e) {
-            this.logError(`An error occurred when running hook: ${id}:${T}`);
-            this.logError(e);
-          }
-        }
-      };
-    });
+  // ---- lifecycle hooks (fanned out to registered mods) ----
 
-    ModLoadControllerCallback_PatchHook.forEach((T) => {
-      this[T] = async () => {
-        for (const [id, hook] of this.lifeTimeCircleHookTable) {
-          try {
-            if (hook[T]) {
-              await hook[T]!.apply(hook, []);
-            }
-          } catch (e) {
-            this.logError(`An error occurred when running hook: ${id}:${T}`);
-            this.logError(e);
-          }
-        }
-      };
-    });
-  
-    ModLoadControllerCallback_ModLoader.forEach((T) => {
-      this[T] = async () => {
-        for (const [ id, hook ] of this.lifeTimeCircleHookTable) {
-          try {
-            if (hook[T]) {
-              await hook[T]!.apply(hook, []);
-            }
-          } catch (e) {
-            this.logError(`An error occurred when running hook: ${id}:${T}`);
-            this.logError(e);
-          }
-        }
-      };
-    });
+  async InjectEarlyLoad_start(modName: string, fileName: string) {
+    await this.emit('InjectEarlyLoad_start', modName, fileName);
+  }
 
-    ModLoadControllerCallback_ReplacePatch.forEach((T) => {
-      this[T] = async (modName: string, fileName: string) => {
-        for (const [ id, hook ] of this.lifeTimeCircleHookTable) {
-          try {
-            if (hook[T]) {
-              await hook[T]!.apply(hook, [modName, fileName]);
-            }
-          } catch (e) {
-            this.logError(`An error occurred when running hook: ${id}:${T}`);
-            this.logError(e);
-          }
-        }
-      };
-    });
+  async InjectEarlyLoad_end(modName: string, fileName: string) {
+    await this.emit('InjectEarlyLoad_end', modName, fileName);
+  }
+
+  async EarlyLoad_start(modName: string, fileName: string) {
+    await this.emit('EarlyLoad_start', modName, fileName);
+  }
+
+  async EarlyLoad_end(modName: string, fileName: string) {
+    await this.emit('EarlyLoad_end', modName, fileName);
+  }
+
+  async LazyLoad_start(modName: string) {
+    await this.emit('LazyLoad_start', modName);
+  }
+
+  async LazyLoad_end(modName: string) {
+    await this.emit('LazyLoad_end', modName);
+  }
+
+  async Load_start(modName: string, fileName: string) {
+    await this.emit('Load_start', modName, fileName);
+  }
+
+  async Load_end(modName: string, fileName: string) {
+    await this.emit('Load_end', modName, fileName);
+  }
+
+  async PatchModToGame_start() {
+    await this.emit('PatchModToGame_start');
+  }
+
+  async PatchModToGame_end() {
+    await this.emit('PatchModToGame_end');
+  }
+
+  async ReplacePatcher_start(modName: string, fileName: string) {
+    await this.emit('ReplacePatcher_start', modName, fileName);
+  }
+
+  async ReplacePatcher_end(modName: string, fileName: string) {
+    await this.emit('ReplacePatcher_end', modName, fileName);
+  }
+
+  async ModLoaderLoadEnd() {
+    await this.emit('ModLoaderLoadEnd');
   }
 
   /**
@@ -390,11 +306,20 @@ export class ModLoaderController implements ModLoaderControllerCallback {
     return zip;
   }
 
+  private logCache?: Logger;
+
   /**
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L402
    */
-  getLog() {
-    return buildLogger();
+  getLog(): Logger {
+    if (!this.logCache) {
+      this.logCache = {
+        log: this.logInfo,
+        warn: this.logWarning,
+        error: this.logError,
+      };
+    }
+    return this.logCache;
   }
 
   /**

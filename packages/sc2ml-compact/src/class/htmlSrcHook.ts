@@ -53,17 +53,12 @@ export class HtmlTagSrcHook {
     return maybeExists;
   }
 
-  /**
-   * We don't need this so it's not implemented.
-   */
-  async doHook() { return false }
-
-  /**
-   * We don't need this so it's not implemented.
-   */
-  async doHookCallback() { return [ false, (void 0) ] }
-
   async requestImageBySrc(src: string) {
+    if (!src) {
+      console.error(`[HtmlTagSrcHook] requestImageBySrc: no src [${src}]`);
+      return (void 0);
+    }
+    src = this.normalizePath(src);
     const context = { src, element: new Image };
     await window.YASCHook.resources.image.run(context);
     return context.src;
@@ -88,9 +83,14 @@ export class HtmlTagSrcHook {
 
   private async handleHook(context: { src: string, element: HTMLImageElement | SVGImageElement }, next: () => void) {
     const src = context.src;
-    const el = document.createElement('null');
     const field = context.element instanceof HTMLImageElement ? 'src' : 'href';
-    Object.assign(el, context.element);
+    // A tiny attribute-proxy so mod hooks can `getAttribute(field)` /
+    // `setAttribute(field, ...)` without touching the real DOM element.
+    const el: any = {
+      [field]: context.src,
+      getAttribute(key: string) { return this[key] ?? null; },
+      setAttribute(key: string, value: string) { this[key] = value; },
+    };
 
     for (const [, hookFn ] of this.hooksReturned) {
       try {

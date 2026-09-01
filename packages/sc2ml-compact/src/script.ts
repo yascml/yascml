@@ -1,41 +1,54 @@
 /**
- * Minimal script/style injection helpers for sc2ml-compact.
+ * Script/style injection helpers for sc2ml-compact.
  *
- * The loader runtime doesn't expose its `executeScript`/`loadStyle` as module
- * exports (it's a UMD bundle), so we provide equivalent small helpers here.
- * Scripts are executed as inline `<script>` elements; styles are appended to
- * `<head>` as standalone `<style>` elements (additive, never rewriting game data).
+ * Prefers the loader's own runtime utils (`window.YASCML.utils.executeScript` /
+ * `.loadStyle`) so execution semantics (error handling, blob support) stay
+ * consistent with the rest of YASCML. Falls back to a minimal local
+ * implementation if the loader doesn't expose them.
  */
+
+const getLoaderUtils = () => (window as any).YASCML?.utils;
 
 /**
- * Execute a script string asynchronously (inline `<script>` appended to `<body>`).
+ * Execute a script string asynchronously. Prefers the loader's implementation.
  */
-export const executeScript = (script: string): Promise<void> => new Promise((res, rej) => {
-  const dom = document.createElement('script');
-  dom.type = 'text/javascript';
-  dom.textContent = script;
+export const executeScript = (script: string): Promise<void> => {
+  const utils = getLoaderUtils();
+  if (utils?.executeScript) {
+    return utils.executeScript(script);
+  }
 
-  const done = (error?: unknown) => {
-    window.removeEventListener('error', errorHandler);
-    if (error) rej(error);
-    else res(void 0);
-  };
-  const errorHandler = (e: ErrorEvent) => {
-    done(e.error ?? new Error('Script execution failed'));
-  };
+  // Fallback: inline `<script>` appended to `<body>`.
+  return new Promise((res, rej) => {
+    const dom = document.createElement('script');
+    dom.type = 'text/javascript';
+    dom.textContent = script;
 
-  window.addEventListener('error', errorHandler);
-  document.body.appendChild(dom);
+    const done = (error?: unknown) => {
+      window.removeEventListener('error', errorHandler);
+      if (error) rej(error);
+      else res(void 0);
+    };
+    const errorHandler = (e: ErrorEvent) => {
+      done(e.error ?? new Error('Script execution failed'));
+    };
 
-  // Inline scripts don't fire `load`; resolve on the next tick once executed.
-  setTimeout(() => done(void 0), 0);
-});
+    window.addEventListener('error', errorHandler);
+    document.body.appendChild(dom);
+    setTimeout(() => done(void 0), 0);
+  });
+};
 
 /**
  * Inject a style string as a standalone `<style>` element in `<head>`.
  * Additive only — never modifies existing game style nodes.
  */
 export const loadStyle = (style: string, meta?: Record<string, string>): HTMLStyleElement => {
+  const utils = getLoaderUtils();
+  if (utils?.loadStyle) {
+    return utils.loadStyle(style, meta);
+  }
+
   const dom = document.createElement('style');
   dom.type = 'text/css';
   dom.textContent = style;

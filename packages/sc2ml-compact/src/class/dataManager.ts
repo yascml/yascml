@@ -71,7 +71,7 @@ export class SC2DataManager {
 
   constructor(window: _Window) {
     this.thisWin = window;
-    this.modLoader = new ModLoader(this.thisWin);
+    this.modLoader = new ModLoader(this);
     this.modUtils = new ModUtils(this, this.thisWin);
     this.modLoadController = new ModLoaderController(this);
     this.htmlTagSrcHook = new HtmlTagSrcHook(this);
@@ -89,6 +89,7 @@ export class SC2DataManager {
   /**
    * Validate that the game exposes the SugarCube 2 story-data structure needed
    * by the compact compatibility layer. Read-only; never changes the DOM.
+   * Non-critical anomalies are reported as warnings rather than hard failures.
    */
   checkSC2Data() {
     const rootNodes = this.thisWin.document.getElementsByTagName('tw-storydata');
@@ -100,22 +101,33 @@ export class SC2DataManager {
     const styles = root.getElementsByTagName('style');
     const scripts = root.getElementsByTagName('script');
     const passages = root.getElementsByTagName('tw-passagedata');
-    if (styles.length !== 1 || scripts.length !== 1 || passages.length < 1) {
-      console.error(`checkSC2Data(): invalid story data (styles=${styles.length}, scripts=${scripts.length}, passages=${passages.length})`);
+    if (styles.length !== 1) console.warn(`checkSC2Data(): expected 1 <style>, found ${styles.length}`);
+    if (scripts.length !== 1) console.warn(`checkSC2Data(): expected 1 <script>, found ${scripts.length}`);
+    if (passages.length < 1) {
+      console.error(`checkSC2Data(): no <tw-passagedata> found (${passages.length})`);
       return false;
     }
     return true;
   }
 
   /**
-   * Compatibility facade for the upstream DependenceChecker instance.
+   * Compatibility facade for the upstream DependenceChecker instance (cached).
    */
+  private dependenceCheckerFacade?: {
+    checkFor: (mod: ModInfo, loaded: ModInfo[]) => boolean,
+    check: () => boolean,
+    checkGameVersion: (gameVersion: string) => boolean,
+  };
+
   getDependenceChecker() {
-    return {
-      checkFor: (mod: ModInfo, loaded: ModInfo[]) => checkFor(mod, loaded),
-      check: () => check(this.modLoader.getModCacheArray()),
-      checkGameVersion: (gameVersion: string) => checkGameVersion(gameVersion, this.modLoader.getModCacheArray()),
-    };
+    if (!this.dependenceCheckerFacade) {
+      this.dependenceCheckerFacade = {
+        checkFor: (mod: ModInfo, loaded: ModInfo[]) => checkFor(mod, loaded),
+        check: () => check(this.modLoader.getModCacheArray()),
+        checkGameVersion: (gameVersion: string) => checkGameVersion(gameVersion, this.modLoader.getModCacheArray()),
+      };
+    }
+    return this.dependenceCheckerFacade;
   }
 
   /**
@@ -331,34 +343,18 @@ export class SC2DataManager {
     if (this.startInitOk) return;
     this.startInitOk = true;
 
+    if (!this.checkSC2Data()) {
+      console.warn('sc2ml-compact: game story data looks unusual; continuing anyway');
+    }
+
     this.initSC2DataInfoCache();
 
     const mods = await this.collectMods();
     this.modLoader.setModList(mods);
 
-    // Inject `inject_early` scripts as DOM scripts (before engine start).
+    // Inject `inject_early` + run `earlyload` scripts for every mod.
     for (const mod of mods) {
-      for (const [ fileName, content ] of mod.scriptFileList_inject_early) {
-        await this.modLoadController.InjectEarlyLoad_start(mod.name, fileName);
-        injectEarlyScript(content, { modName: mod.name, filename: fileName, stage: 'InjectEarlyLoad' });
-        await this.modLoadController.InjectEarlyLoad_end(mod.name, fileName);
-      }
-    }
-
-    // Run `earlyload` scripts.
-    for (const mod of mods) {
-      for (const [ fileName, content ] of mod.scriptFileList_earlyload) {
-        await this.modLoadController.EarlyLoad_start(mod.name, fileName);
-        this.runningModName = mod.name;
-        try {
-          await executeScript(content);
-        } catch (e) {
-          console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
-        } finally {
-          this.runningModName = (void 0);
-        }
-        await this.modLoadController.EarlyLoad_end(mod.name, fileName);
-      }
+      await this.runModPreloadScripts(mod);
     }
 
     // Validate dependencies across the final mod order.
@@ -429,6 +425,31 @@ export class SC2DataManager {
 
     await this.modLoadController.ModLoaderLoadEnd();
   };
+
+  /**
+   * Run a single mod's pre-engine scripts: `inject_early` (as DOM scripts) then
+   * `earlyload` (executed). Used during `startInit` and lazy registration.
+   */
+  async runModPreloadScripts(mod: ModInfo) {
+    for (const [ fileName, content ] of mod.scriptFileList_inject_early) {
+      await this.modLoadController.InjectEarlyLoad_start(mod.name, fileName);
+      injectEarlyScript(content, { modName: mod.name, filename: fileName, stage: 'InjectEarlyLoad' });
+      await this.modLoadController.InjectEarlyLoad_end(mod.name, fileName);
+    }
+
+    for (const [ fileName, content ] of mod.scriptFileList_earlyload) {
+      await this.modLoadController.EarlyLoad_start(mod.name, fileName);
+      this.runningModName = mod.name;
+      try {
+        await executeScript(content);
+      } catch (e) {
+        console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
+      } finally {
+        this.runningModName = (void 0);
+      }
+      await this.modLoadController.EarlyLoad_end(mod.name, fileName);
+    }
+  }
 
   /**
    * Collect and parse all enabled/suitable SC2ML mods from the YASCML loader.
