@@ -122,9 +122,18 @@ export const bootJsonToMeta = (bootJ: ModBootJson): ModMetaFile => {
     version: normalizeVersion(bootJ.version),
   };
 
+  meta.dependencies = {
+    'sc2ml-compat': `^${__VERSION__}`,
+  };
+
   if (bootJ.dependenceInfo && bootJ.dependenceInfo.length > 0) {
-    meta.dependencies = {};
     for (const d of bootJ.dependenceInfo) {
+      // Skip `GameVersion` since there's no such thing in YASCML
+      if (d.modName === 'GameVersion') continue;
+
+      // Skip `ModLoader` since we will add our own info
+      if (d.modName === 'ModLoader') continue;
+
       // Keep as-is (SC2ML mod names); sc2ml-compact resolves these at runtime.
       meta.dependencies[d.modName] = d.version;
     }

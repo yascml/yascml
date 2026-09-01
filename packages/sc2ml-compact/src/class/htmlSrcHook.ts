@@ -69,6 +69,23 @@ export class HtmlTagSrcHook {
     return context.src;
   }
 
+  /**
+   * Normalize a relative asset path, matching the upstream SC2ML helper.
+   */
+  normalizePath(path: string): string {
+    if (!path) return path;
+
+    const normalized: string[] = [];
+    for (const segment of path.split('/').filter(segment => segment && segment !== '.')) {
+      if (segment === '..') {
+        if (normalized.length > 0) normalized.pop();
+      } else {
+        normalized.push(segment);
+      }
+    }
+    return normalized.join('/');
+  }
+
   private async handleHook(context: { src: string, element: HTMLImageElement | SVGImageElement }, next: () => void) {
     const src = context.src;
     const el = document.createElement('null');

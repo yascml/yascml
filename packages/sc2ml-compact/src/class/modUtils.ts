@@ -1,5 +1,6 @@
 import lodash from 'lodash';
-import { buildIdbRef, buildIdbKeyvalRef } from '../ref';
+import JSZip from 'jszip';
+import { buildIdbRef, buildIdbKeyValRef } from '../ref';
 import { _Window, Logger } from '../types';
 import type { SC2DataManager } from './dataManager';
 import type { PassageDataItem } from './dataInfo';
@@ -9,6 +10,7 @@ import { Twee2Passage, Twee2PassageR } from '../twee';
 import { ModInfo } from '../mod/modInfo';
 import { SimulateMergeResult } from '../simulateMerge';
 import { SemVerToolsType } from '../semver';
+import { parseModZip } from '../mod/modZip';
 
 /**
  * The SC2ML mod-facing API, exposed as `window.modUtils`.
@@ -45,17 +47,15 @@ export class ModUtils {
   }
 
   getAnyModByNameNoAlias(name: string) {
-    return this.pSC2DataManager.getModLoader().getModCacheByNameOne(name);
+    return this.pSC2DataManager.getModLoader().getModCacheByNameOne(name)?.mod;
   }
 
   getMod(name: string): ModInfo | undefined {
-    return this.pSC2DataManager.getModLoader().getModCacheByAliseOne(name);
+    return this.pSC2DataManager.getModLoader().getModCacheByAliseOne(name)?.mod;
   }
 
   getModAndFromInfo(name: string): { name: string, mod: ModInfo, from: string } | undefined {
-    const mod = this.pSC2DataManager.getModLoader().getModCacheByAliseOne(name);
-    if (!mod) return undefined;
-    return { name: mod.name, mod, from: 'Local' };
+    return this.pSC2DataManager.getModLoader().getModCacheByAliseOne(name);
   }
 
   getAllModInfoByFromType(_from: string): { name: string, mod: ModInfo, from: string }[] {
@@ -205,6 +205,10 @@ export class ModUtils {
     return this.pSC2DataManager.getModLoader();
   }
 
+  getAddonPluginManager() {
+    return this.pSC2DataManager.getAddonPluginManager();
+  }
+
   getLogger(): Logger {
     return this.pSC2DataManager.getModLoadController().getLog();
   }
@@ -225,19 +229,17 @@ export class ModUtils {
     return buildIdbRef();
   }
 
-  getIdbKeyvalRef() {
-    return buildIdbKeyvalRef();
+  getIdbKeyValRef() {
+    return buildIdbKeyValRef();
   }
 
   /**
    * Lazy-register a new mod zip at runtime (no ModPack support; plain zips only).
    */
   async lazyRegisterNewModZipData(data: Blob | ArrayBuffer | Uint8Array, _options?: unknown) {
-    console.log('lazyRegisterNewModZipData', data);
+      console.log('lazyRegisterNewModZipData', data);
     try {
-      const JSZip = (await import('jszip')).default;
       const zip = await JSZip.loadAsync(data);
-      const { parseModZip } = await import('../mod/modZip');
       const mod = await parseModZip(zip);
       const mods = this.pSC2DataManager.getModLoader().getModCacheArray();
       if (mods.find(m => m.name === mod.name)) {
@@ -268,5 +270,15 @@ export class ModUtils {
 
   getNowMainLanguage(): string {
     return 'en';
+  }
+
+  getAddonParamsFromModInfo(
+    modInfo: ModInfo,
+    addonPluginModName: string,
+    addonName: string,
+  ) {
+    return modInfo.bootJson.addonPlugin?.find(item => (
+      item.modName === addonPluginModName && item.addonName === addonName
+    ))?.params;
   }
 }

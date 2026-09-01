@@ -6,7 +6,7 @@ export const buildIdbRef = () => ({
   idb_deleteDB: idb.deleteDB,
 });
 
-export const buildIdbKeyvalRef = () => ({
+export const buildIdbKeyValRef = () => ({
   keyval_get: idbKeyval.get,
   keyval_set: idbKeyval.set,
   keyval_del: idbKeyval.del,

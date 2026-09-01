@@ -1,6 +1,14 @@
 import { _Window, Logger } from '../types';
 import { buildLogger } from '../utils';
 import type { ModInfo } from '../mod/modInfo';
+import { simulateMergeSC2DataInfoCache } from '../simulateMerge';
+import { SC2ModZip } from './modZip';
+
+export type ModOrderItem = {
+  name: string,
+  mod: ModInfo,
+  from: 'Local',
+};
 
 export class ModLoader {
   readonly thisWin: _Window;
@@ -15,6 +23,7 @@ export class ModLoader {
    * Parsed SC2ML mods, in load order.
    */
   private modList: ModInfo[] = [];
+  private modZipMap = new Map<string, SC2ModZip>();
 
   constructor(window: _Window) {
     this.thisWin = window;
@@ -26,6 +35,11 @@ export class ModLoader {
    */
   setModList(mods: ModInfo[]) {
     this.modList = mods;
+    this.modZipMap.clear();
+    for (const mod of mods) {
+      const source = this.thisWin.YASCML.mods.find(item => item.name === mod.name)?.zip;
+      if (source) this.modZipMap.set(mod.name, new SC2ModZip(source, mod));
+    }
   }
 
   /**
@@ -38,31 +52,61 @@ export class ModLoader {
   /**
    * Get the parsed mod list as mod order items (upstream-compatible alias).
    */
-  getModCacheOneArray(): { name: string, mod: ModInfo | null }[] {
-    return this.modList.map(mod => ({ name: mod.name, mod }));
+  getModCacheOneArray(): ModOrderItem[] {
+    return this.modList.map(mod => ({ name: mod.name, mod, from: 'Local' }));
   }
 
   getModListName() {
-    return this.thisWin.YASCML.mods.map(e => e.name);
+    return this.getModAllName();
   }
 
-  getModCacheByNameOne(name: string) {
-    const index = this.thisWin.YASCML.mods.findIndex(e => e.name === name);
-    if (index === -1) return null;
-    return this.thisWin.YASCML.mods[index];
+  getModAllName(): string[] {
+    return this.modList.map(mod => mod.name);
+  }
+
+  getModCacheMap(): ReadonlyMap<string, ModOrderItem> {
+    return new Map(this.getModCacheOneArray().map(item => [ item.name, item ]));
+  }
+
+  getModCacheMapWithAlias(): ReadonlyMap<string, ModOrderItem> {
+    const map = new Map<string, ModOrderItem>();
+    for (const item of this.getModCacheOneArray()) {
+      map.set(item.name, item);
+      for (const alias of item.mod.alias) map.set(alias, item);
+    }
+    return map;
+  }
+
+  checkModCacheData(): boolean {
+    return this.modList.every(mod => !!mod.name && !!mod.version);
+  }
+
+  checkModCacheUniq(): boolean {
+    const names = this.getModCacheMapWithAlias();
+    return names.size === this.modList.reduce((count, mod) => count + 1 + mod.alias.length, 0);
+  }
+
+  getModCacheByNameOne(name: string): ModOrderItem | undefined {
+    const mod = this.modList.find(item => item.name === name);
+    return mod ? { name: mod.name, mod, from: 'Local' } : (void 0);
   }
 
   /**
    * Get a parsed SC2ML mod by name or alias.
    */
-  getModCacheByAliseOne(name: string): ModInfo | undefined {
-    return this.modList.find(m => m.name === name || m.alias.includes(name));
+  getModCacheByAliseOne(name: string): ModOrderItem | undefined {
+    const mod = this.modList.find(m => m.name === name || m.alias.includes(name));
+    return mod ? { name: mod.name, mod, from: 'Local' } : (void 0);
   }
 
   /**
    * Get the parsed SC2ML mod whose name (or alias) matches `modName`.
    */
   getModCacheByNameOneModInfo(modName: string): ModInfo | undefined {
+    return this.getModCacheByAliseOne(modName)?.mod;
+  }
+
+  getModByNameOne(modName: string): ModOrderItem | undefined {
     return this.getModCacheByAliseOne(modName);
   }
 
@@ -70,14 +114,43 @@ export class ModLoader {
    * Get the YASCML zip of a parsed SC2ML mod (name or alias).
    */
   getModZip(modName: string) {
-    const mod = this.thisWin.YASCML.mods.find(m => m.name === modName);
-    return mod?.zip;
+    const info = this.getModCacheByAliseOne(modName)?.mod;
+    return info ? this.modZipMap.get(info.name) : (void 0);
   }
 
   /**
    * All parsed SC2ML mods, as `{ name, mod, from }` (source is always 'Local' in YASCML).
    */
-  getModCacheByFromType(_from: string) {
+  getModCacheByFromType(_from: string): ModOrderItem[] {
     return this.modList.map(mod => ({ name: mod.name, mod, from: 'Local' }));
   }
+
+  checkModConflictList() {
+    if (this.modList.length === 0) return [];
+    return simulateMergeSC2DataInfoCache(...this.modList.map(mod => mod.cache)).map((result, index) => ({
+      mod: this.modList[index].cache,
+      result,
+    }));
+  }
+
+  getModReadCache() {
+    console.warn('sc2ml-compact: getModReadCache is unavailable; YASCML owns import storage');
+    return (void 0);
+  }
+
+  getModEarlyLoadCache() {
+    console.warn('sc2ml-compact: getModEarlyLoadCache is unavailable; scripts run directly');
+    return (void 0);
+  }
+
+  getLoaderKeyConfig() {
+    console.warn('sc2ml-compact: getLoaderKeyConfig is unavailable; YASCML owns storage configuration');
+    return (void 0);
+  }
+
+  getIndexDBLoader() { console.warn('sc2ml-compact: IndexDBLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLocalStorageLoader() { console.warn('sc2ml-compact: LocalStorageLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLocalLoader() { console.warn('sc2ml-compact: LocalLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getRemoteLoader() { console.warn('sc2ml-compact: RemoteLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLazyLoader() { console.warn('sc2ml-compact: LazyLoader is unavailable; use modUtils.lazyRegisterNewModZipData'); return (void 0); }
 }

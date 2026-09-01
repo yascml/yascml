@@ -8,7 +8,7 @@ import { ModInfo, Sc2mlCacheData } from '../mod/modInfo';
 import { buildModInfoFromCache, parseModZip, Sc2mlCacheFilePath } from '../mod/modZip';
 import { normalMergeSC2DataInfoCache, replaceMergeSC2DataInfoCache } from '../merge';
 import { ReplacePatcher } from '../replacePatcher';
-import { check } from '../dependenceChecker';
+import { check, checkFor, checkGameVersion } from '../dependenceChecker';
 import { simulateMergeSC2DataInfoCache, SimulateMergeResult } from '../simulateMerge';
 import { executeScript, injectEarlyScript, loadStyle } from '../script';
 import { Sc2EventTracer } from '../eventTracer';
@@ -82,8 +82,74 @@ export class SC2DataManager {
     return this.modUtils;
   }
 
-  getEventTracer() {
+  getSc2EventTracer() {
     return this.eventTracer;
+  }
+
+  /**
+   * Validate that the game exposes the SugarCube 2 story-data structure needed
+   * by the compact compatibility layer. Read-only; never changes the DOM.
+   */
+  checkSC2Data() {
+    const rootNodes = this.thisWin.document.getElementsByTagName('tw-storydata');
+    if (rootNodes.length !== 1) {
+      console.error(`checkSC2Data(): expected one <tw-storydata>, found ${rootNodes.length}`);
+      return false;
+    }
+    const root = rootNodes[0];
+    const styles = root.getElementsByTagName('style');
+    const scripts = root.getElementsByTagName('script');
+    const passages = root.getElementsByTagName('tw-passagedata');
+    if (styles.length !== 1 || scripts.length !== 1 || passages.length < 1) {
+      console.error(`checkSC2Data(): invalid story data (styles=${styles.length}, scripts=${scripts.length}, passages=${passages.length})`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Compatibility facade for the upstream DependenceChecker instance.
+   */
+  getDependenceChecker() {
+    return {
+      checkFor: (mod: ModInfo, loaded: ModInfo[]) => checkFor(mod, loaded),
+      check: () => check(this.modLoader.getModCacheArray()),
+      checkGameVersion: (gameVersion: string) => checkGameVersion(gameVersion, this.modLoader.getModCacheArray()),
+    };
+  }
+
+  /**
+   * Unsupported in the compact no-DOM port. Passage middleware provides the
+   * supported virtual-passage extension point instead.
+   */
+  getPassageTracer() {
+    console.warn('sc2ml-compact: PassageTracer is unavailable in the no-DOM port');
+    return (void 0);
+  }
+
+  getLanguageManager() {
+    console.warn('sc2ml-compact: LanguageManager is unavailable in the compact port');
+    return (void 0);
+  }
+
+  getJsPreloader() {
+    console.warn('sc2ml-compact: JsPreloader is unavailable; use getNowRunningModName()');
+    return (void 0);
+  }
+
+  getAddonPluginManager() {
+    console.warn('sc2ml-compact: AddonPluginManager is unavailable in the compact port');
+    return (void 0);
+  }
+
+  getSC2JsEvalContext() {
+    console.warn('sc2ml-compact: SC2JsEvalContext is unavailable in the compact port');
+    return (void 0);
+  }
+
+  getWikifyTracer() {
+    console.warn('sc2ml-compact: WikifyTracer is unavailable; use YASCHook.passage instead');
+    return (void 0);
   }
 
   /**
@@ -189,6 +255,51 @@ export class SC2DataManager {
    */
   getConflictResult(): SimulateMergeResult[] {
     return this.conflictResult;
+  }
+
+  /**
+   * Apply every parsed SC2ML replace patch to an in-memory data cache.
+   */
+  async applyReplacePatcher(modSC2DataInfoCache: SC2DataInfo) {
+    for (const mod of this.modLoader.getModCacheArray()) {
+      for (const { fileName, patchInfo } of mod.replacePatchers) {
+        await this.modLoadController.ReplacePatcher_start(mod.name, fileName);
+        new ReplacePatcher(mod.name, fileName, patchInfo).applyReplacePatcher(modSC2DataInfoCache);
+        await this.modLoadController.ReplacePatcher_end(mod.name, fileName);
+      }
+    }
+    return modSC2DataInfoCache;
+  }
+
+  /**
+   * No-DOM equivalent of upstream patchModToGame(): merge all parsed mods,
+   * apply replace patches, then refresh the virtual passage table.
+   */
+  async patchModToGame() {
+    await this.modLoadController.PatchModToGame_start();
+    this.buildMergedData(this.modLoader.getModCacheArray());
+    await this.modLoadController.PatchModToGame_end();
+    return this.getSC2DataInfoAfterPatch();
+  }
+
+  makePassageNode(_item?: unknown) {
+    console.warn('sc2ml-compact: makePassageNode is unavailable in the no-DOM port');
+    return (void 0);
+  }
+
+  makeStyleNode(_data?: unknown) {
+    console.warn('sc2ml-compact: makeStyleNode is unavailable in the no-DOM port');
+    return (void 0);
+  }
+
+  makeScriptNode(_data?: unknown) {
+    console.warn('sc2ml-compact: makeScriptNode is unavailable in the no-DOM port');
+    return (void 0);
+  }
+
+  rePlacePassage(_remove?: Element[], _add?: Element[]) {
+    console.warn('sc2ml-compact: rePlacePassage is unavailable in the no-DOM port');
+    return (void 0);
   }
 
   /**
@@ -338,7 +449,11 @@ export class SC2DataManager {
         if (!info) {
           info = await parseModZip(mod.zip);
         }
+        if (!await this.modLoadController.canLoadThisMod(info.bootJson, mod.zip)) {
+          continue;
+        }
         result.push(info);
+        await this.modLoadController.afterModLoad(info.bootJson, mod.zip, info);
       } catch (e) {
         // Not a SC2ML mod (no boot.json) or invalid mod; skip silently with a warning.
         console.warn(`sc2ml-compact: skip mod "${mod.name}" (${(e as Error).message})`);

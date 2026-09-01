@@ -1,5 +1,8 @@
 import { buildLogger } from '../utils';
 import type { SC2DataManager } from './dataManager';
+import type JSZip from 'jszip';
+import type { ModBootJson } from '../mod/bootJson';
+import type { ModInfo } from '../mod/modInfo';
 
 /**
  * Callbacks for life-cycle hook
@@ -13,7 +16,7 @@ export interface ModLoaderControllerCallback {
    * @todo Type definition
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L25
    */
-  canLoadThisMod(): Promise<boolean>;
+  canLoadThisMod(bootJson: ModBootJson, zip: JSZip): Promise<boolean>;
 
   /**
    * Called after a mod being loaded.
@@ -21,7 +24,7 @@ export interface ModLoaderControllerCallback {
    * @todo Type definition
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L33
    */
-  afterModLoad(): Promise<any>;
+  afterModLoad(bootJson: ModBootJson, zip: JSZip, modInfo: ModInfo): Promise<any>;
 
   /**
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L35
@@ -89,6 +92,7 @@ export interface ModLoaderControllerCallback {
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L68
    */
   ModLoaderLoadEnd: () => Promise<any>;
+  exportDataZip: (zip: JSZip) => Promise<JSZip>;
 }
 
 export type LifeTimeCircleHook = Partial<ModLoaderControllerCallback>;
@@ -313,13 +317,33 @@ export class ModLoaderController implements ModLoaderControllerCallback {
    * @todo Type definition
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L302
    */
-  async afterModLoad() {}
+  async afterModLoad(bootJson: ModBootJson, zip: JSZip, modInfo: ModInfo) {
+    for (const [id, hook] of this.lifeTimeCircleHookTable) {
+      try {
+        if (hook.afterModLoad) await hook.afterModLoad(bootJson, zip, modInfo);
+      } catch (e) {
+        this.logError(`ModLoadController afterModLoad() ${id}: ${(e as Error).message}`);
+      }
+    }
+  }
 
   /**
    * @todo Type definition
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L283
    */
-  async canLoadThisMod() { return true; }
+  async canLoadThisMod(bootJson: ModBootJson, zip: JSZip) {
+    for (const [id, hook] of this.lifeTimeCircleHookTable) {
+      try {
+        if (hook.canLoadThisMod && !await hook.canLoadThisMod(bootJson, zip)) {
+          this.logWarning(`ModLoadController canLoadThisMod() mod [${bootJson.name}] was blocked by [${id}]`);
+          return false;
+        }
+      } catch (e) {
+        this.logError(`ModLoadController canLoadThisMod() ${id}: ${(e as Error).message}`);
+      }
+    }
+    return true;
+  }
 
   /**
    * Get a mod's `boot.json` from provided Base64 data.
@@ -355,7 +379,16 @@ export class ModLoaderController implements ModLoaderControllerCallback {
    * @todo I think we can implement this.
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L319
    */
-  exportDataZip() { return null; }
+  async exportDataZip(zip: JSZip): Promise<JSZip> {
+    for (const [id, hook] of this.lifeTimeCircleHookTable) {
+      try {
+        if (hook.exportDataZip) zip = await hook.exportDataZip(zip);
+      } catch (e) {
+        this.logError(`ModLoadController exportDataZip() ${id}: ${(e as Error).message}`);
+      }
+    }
+    return zip;
+  }
 
   /**
    * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/8a858233f30eaa0617454cf7c14448643c06d2b6/src/BeforeSC2/ModLoadController.ts#L402
