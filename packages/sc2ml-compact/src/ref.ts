@@ -14,25 +14,38 @@ export interface IdbKeyvalRef {
   setMany: typeof idbKeyval.setMany,
 }
 
-// Reuse the globals the loader already installs (window.idbKeyval) when present,
-// otherwise fall back to the bundled module instances. Cached so callers don't
-// rebuild the ref object on every call.
+// Cached so callers don't rebuild the ref object on every call.
 let idbKeyvalRef: IdbKeyvalRef | undefined;
 let idbRef: IdbRef | undefined;
 
+/**
+ * NOTE: we deliberately do NOT trust `window.idb` here — SugarCube games
+ * (e.g. Degrees of Lewdity) define their own `window.idb` for saves, which
+ * would shadow the `idb` npm package. Always use the bundled module.
+ */
 export const buildIdbRef = (): IdbRef => {
   if (idbRef) return idbRef;
-  const instance: typeof idb = (window as any).idb ?? idb;
   idbRef = {
-    idb_openDB: instance.openDB,
-    idb_deleteDB: instance.deleteDB,
+    idb_openDB: idb.openDB,
+    idb_deleteDB: idb.deleteDB,
   };
   return idbRef;
 };
 
+const looksLikeIdbKeyval = (v: any): v is typeof idbKeyval => (
+  !!v && typeof v.get === 'function' && typeof v.set === 'function'
+  && typeof v.del === 'function' && typeof v.createStore === 'function'
+);
+
+/**
+ * Prefer the loader-installed `window.idbKeyval` global when it looks like the
+ * real idb-keyval API (the loader sets this). Fall back to the bundled module.
+ */
 export const buildIdbKeyValRef = (): IdbKeyvalRef => {
   if (idbKeyvalRef) return idbKeyvalRef;
-  const keyval: typeof idbKeyval = (window as any).idbKeyval ?? idbKeyval;
+  const keyval: typeof idbKeyval = looksLikeIdbKeyval((window as any).idbKeyval)
+    ? (window as any).idbKeyval
+    : idbKeyval;
   idbKeyvalRef = {
     keyval_get: keyval.get,
     keyval_set: keyval.set,

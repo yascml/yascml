@@ -249,6 +249,7 @@ export class ModUtils {
       mods.push(mod);
       this.pSC2DataManager.getModLoader().setModList(mods);
       await this.pSC2DataManager.runModPreloadScripts(mod);
+      await this.pSC2DataManager.drainScriptTasks();
       this.pSC2DataManager.rebuildAll();
       return mod;
     } catch (e) {

@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@yascml/loader",
+      "comment": "Add a `YASCML.importPreprocess` hook so consumers (e.g. `@yascml/sc2ml-compact`) can pre-process mod files (e.g. convert SC2ML `boot.json` mods into importable files) before import and persistence in `ModList.add`",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@yascml/loader"
+}

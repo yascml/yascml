@@ -1,0 +1,10 @@
+{
+  "changes": [
+    {
+      "packageName": "@yascml/sc2ml-compact",
+      "comment": "Implement SC2ML (sugarcube-2-ModLoader) mod compatibility: import/parse `boot.json` mods (with an `importPreprocess` hook that rebuilds mod zips with a synthesized `meta.json` + pre-parse cache), twee splitting, `SC2DataInfo` parsing, merge helpers, `ReplacePatcher`, semver via npm `semver` (with a small fallback for 4-part SC2ML versions), dependency checking, conflict detection, a no-DOM-rewrite data manager that serves mod-provided passages through a single `YASCHook.passage` middleware, auto-runs `inject_early` scripts synchronously and awaits `earlyload`/`preload` async bodies via an inspectable inline-script runner (`runScriptAwait`, mirroring upstream `JsPreloader.JsRunner`) drained with `Promise.all` through a script-task registry on `SC2DataManager` before the engine boots (so widgets and the start passage are compiled from translated text on first render), injects mod styles additively, and runs user/preload scripts at the end of `startInit` (pre-engine, matching upstream ordering); plus the mod-facing `modUtils` API (getMod/getPassageData/updatePassageData/replaceFollowSC2DataInfo/getModConflictInfo/getSemVerTools/string helpers), `ModLoader`/`ModLoadController`/globals wiring (with plain lifecycle methods and an `emit` helper), IDB methods delegated to YASCML, a `Sc2EventTracer` mapping engine-native `:storyready`/`:passage*` jQuery events to `whenSC2*` callbacks, hardened compat behavior (image path normalization, unified conflict source, lazy-register running mod scripts, reused loader-native script/style utils and cached idb refs), and runtime compat fixes so real SC2ML mods run: `SC2ModZip.modZipReaderHash` (md5-based), a minimal `LanguageManager`, `ModInfo.imgs` with lazy base64 image getters, idb refs that don't collide with the game's own `window.idb`, and merging that preserves runtime mod modifications made during `inject_early`/`earlyload`",
+      "type": "patch"
+    }
+  ],
+  "packageName": "@yascml/sc2ml-compact"
+}

@@ -2,6 +2,17 @@ import type { SC2DataInfo } from '../class/dataInfo';
 import type { ModBootJson, ModNickName } from './bootJson';
 import type { PatchInfo } from './patchInfo';
 
+export interface ModImgGetter {
+  invalid: boolean,
+  forceCache(): Promise<string | undefined>,
+  getBase64Image(): Promise<string | undefined>,
+}
+
+export interface ModImg {
+  path: string,
+  getter: ModImgGetter,
+}
+
 /**
  * A parsed SC2ML mod, mirroring the upstream `ModInfo`.
  *
@@ -28,6 +39,10 @@ export interface ModInfo {
    */
   replacePatchers: { fileName: string, patchInfo: PatchInfo }[],
   imgFileList: string[],
+  /**
+   * Mod image assets with lazy base64 getters.
+   */
+  imgs: ModImg[],
 }
 
 /**

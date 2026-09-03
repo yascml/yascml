@@ -4,6 +4,7 @@ import { Twee2Passage } from '../twee';
 import { parseBootJson } from './bootJson';
 import { checkPatchInfo, PatchInfo } from './patchInfo';
 import { ModInfo, SC2ML_CACHE_FORMAT_VERSION, Sc2mlCacheData } from './modInfo';
+import { buildModImgs } from './modImg';
 
 export const BootJsonFilePath = 'boot.json';
 export const Sc2mlCacheFilePath = 'yascml-sc2data.json';
@@ -109,6 +110,7 @@ export const parseModZip = async (zip: JSZip): Promise<ModInfo> => {
     scriptFileList_inject_early: await readFileList(zip, bootJson.scriptFileList_inject_early ?? []),
     replacePatchers,
     imgFileList: bootJson.imgFileList ?? [],
+    imgs: buildModImgs(bootJson.name, zip, bootJson.imgFileList ?? []),
   };
 };
 
@@ -165,5 +167,6 @@ export const buildModInfoFromCache = async (
     scriptFileList_inject_early: await readFileList(zip, cache.scriptFileList_inject_early),
     replacePatchers: cache.replacePatchers,
     imgFileList: cache.imgFileList,
+    imgs: buildModImgs(cache.mod.name, zip, cache.imgFileList),
   };
 };

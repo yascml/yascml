@@ -6,6 +6,51 @@ import { parseModZip, BootJsonFilePath } from '../mod/modZip';
 export type ModZipReleasedState = [boolean, boolean | null];
 
 /**
+ * Zip hash used as a stable mod-identity/cache key.
+ *
+ * The compact implementation reuses the YASCML loader's computed `mod.md5`
+ * instead of computing an xxhash. Mods only use this as an opaque cache key
+ * (`hash.toString()`), so any stable string works.
+ *
+ * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/master/src/BeforeSC2/ModZipReader.ts
+ */
+export class ModZipReaderHash {
+  protected _hash?: string;
+
+  constructor(hash?: string) {
+    if (hash) {
+      this._hash = hash;
+    }
+  }
+
+  async init() {
+    if (!this._hash) {
+      throw new Error('[ModZipReaderHash] init() no hash available.');
+    }
+    return this._hash;
+  }
+
+  compare(h: ModZipReaderHash) {
+    return this._hash === h._hash;
+  }
+
+  compareWithString(h: string) {
+    return this._hash === h;
+  }
+
+  toString() {
+    if (!this._hash) {
+      throw new Error('[ModZipReaderHash] toString() this._hash is undefined.');
+    }
+    return this._hash;
+  }
+
+  fromString(_hash: string) {
+    return this._hash;
+  }
+}
+
+/**
  * Compatibility wrapper for the upstream `ModZipReader`.
  *
  * The compact implementation uses YASCML's already-loaded `JSZip` instance and
@@ -20,11 +65,14 @@ export class SC2ModZip {
   private _zip?: JSZip;
   /** Parsed SC2ML metadata, exposed for upstream-compatible mod code. */
   public modInfo?: ModInfo;
+  /** Stable zip hash, exposed for upstream-compatible mod code. */
+  public modZipReaderHash: ModZipReaderHash;
   private released = false;
 
-  constructor(zip: JSZip, modInfo?: ModInfo) {
+  constructor(zip: JSZip, modInfo?: ModInfo, hash?: string) {
     this._zip = zip;
     this.modInfo = modInfo;
+    this.modZipReaderHash = new ModZipReaderHash(hash);
   }
 
   /** The wrapped zip, or throws after `gcReleaseZip()`. */

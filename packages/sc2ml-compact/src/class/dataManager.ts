@@ -10,8 +10,9 @@ import { normalMergeSC2DataInfoCache, replaceMergeSC2DataInfoCache } from '../me
 import { ReplacePatcher } from '../replacePatcher';
 import { check, checkFor, checkGameVersion } from '../dependenceChecker';
 import { simulateMergeSC2DataInfoCache, SimulateMergeResult } from '../simulateMerge';
-import { executeScript, injectEarlyScript, loadStyle } from '../script';
+import { executeScript, injectEarlyScript, loadStyle, runScriptAwait } from '../script';
 import { Sc2EventTracer } from '../eventTracer';
+import { LanguageManager } from '../languageManager';
 
 /**
  * The main entry of SugarCube-2-ModLoader
@@ -68,6 +69,16 @@ export class SC2DataManager {
   runningModName?: string;
 
   private passageMiddlewareRegistered = false;
+  private languageManager?: LanguageManager;
+
+  /**
+   * Registered async script tasks that must complete before the engine boots.
+   * Filled by {@link runModPreloadScripts} (wrapped `earlyload` scripts) and by
+   * anything else via {@link addScriptTask}; drained via {@link drainScriptTasks}
+   * (`Promise.all`) inside `startInit` (which runs within the loader's
+   * `__AfterInit`, before the engine starts).
+   */
+  private readonly scriptTasks: Promise<unknown>[] = [];
 
   constructor(window: _Window) {
     this.thisWin = window;
@@ -77,6 +88,26 @@ export class SC2DataManager {
     this.htmlTagSrcHook = new HtmlTagSrcHook(this);
     this.eventTracer = new Sc2EventTracer(this);
   }
+
+  /**
+   * Register an async script task to be awaited before the engine boots.
+   * The task is started by its producer; this only records it.
+   */
+  addScriptTask(task: Promise<unknown>): void {
+    this.scriptTasks.push(task);
+  }
+
+  /**
+   * Resolve all registered script tasks via `Promise.all`. Clears the registry.
+   * Callers should await this before the engine starts (e.g. at the end of
+   * `startInit`, which itself runs inside `__AfterInit`).
+   */
+  async drainScriptTasks(): Promise<void> {
+    const tasks = this.scriptTasks.splice(0, this.scriptTasks.length);
+    if (tasks.length === 0) return;
+    await Promise.all(tasks);
+  }
+
 
   getModUtils() {
     return this.modUtils;
@@ -140,8 +171,10 @@ export class SC2DataManager {
   }
 
   getLanguageManager() {
-    console.warn('sc2ml-compact: LanguageManager is unavailable in the compact port');
-    return (void 0);
+    if (!this.languageManager) {
+      this.languageManager = new LanguageManager();
+    }
+    return this.languageManager;
   }
 
   getJsPreloader() {
@@ -352,10 +385,22 @@ export class SC2DataManager {
     const mods = await this.collectMods();
     this.modLoader.setModList(mods);
 
-    // Inject `inject_early` + run `earlyload` scripts for every mod.
+    // Inject mod styles as standalone `<style>` elements (additive).
+    for (const mod of mods) {
+      for (const item of mod.cache.styleFileItems.items) {
+        loadStyle(item.content, { modName: mod.name, filename: item.name });
+      }
+    }
+
+    // Inject `inject_early` + schedule `earlyload` scripts for every mod.
     for (const mod of mods) {
       await this.runModPreloadScripts(mod);
     }
+
+    // Wait for every scheduled async script (earlyload bodies) to finish before
+    // merging / registering middleware / running preload, so the engine boots
+    // with translations already in place.
+    await this.drainScriptTasks();
 
     // Validate dependencies across the final mod order.
     if (!check(mods)) {
@@ -368,25 +413,26 @@ export class SC2DataManager {
     // Merge mod data + apply replace patches in memory, build the virtual passage table.
     this.buildMergedData(mods);
 
-    // Inject mod styles as standalone `<style>` elements (additive).
-    for (const mod of mods) {
-      for (const item of mod.cache.styleFileItems.items) {
-        loadStyle(item.content, { modName: mod.name, filename: item.name });
-      }
-    }
-
     // Single injection point: expose mod-provided passages to the engine.
     this.registerPassageMiddleware();
 
     // Subscribe to engine-native SC2 runtime events (`:storyready`, `:passage*`).
     this.eventTracer.init();
 
-    // User scripts (scriptFileList) + `preload` lists run after the engine boots.
+    // Run `scriptFileList` user scripts, then `scriptFileList_preload` scripts.
+    // Executed here (end of startInit, before the engine boots) to mirror the
+    // upstream lifecycle where preload runs between `startInit` and `mainStart`.
+    await this.runPostloadScripts();
   };
 
   /**
-   * Run post-engine scripts (`scriptFileList` user scripts, then `scriptFileList_preload`).
-   * Called from the postload phase.
+   * Run `scriptFileList` user scripts, then `scriptFileList_preload` scripts, then
+   * fire `ModLoaderLoadEnd`.
+   *
+   * Note: in the compact port this is invoked at the end of {@link startInit} —
+   * i.e. before the engine boots — matching upstream `JsPreloader.startLoad()`
+   * (preload runs after `startInit` but before `mainStart`). It is NOT the
+   * YASCML post-engine `postload` phase.
    */
   async runPostloadScripts() {
     const mods = this.modLoader.getModCacheArray();
@@ -407,13 +453,13 @@ export class SC2DataManager {
       }
     }
 
-    // Preload scripts.
+    // Preload scripts (awaited like upstream `JsPreloader.startLoad`).
     for (const mod of mods) {
       for (const [ fileName, content ] of mod.scriptFileList_preload) {
         await this.modLoadController.Load_start(mod.name, fileName);
         this.runningModName = mod.name;
         try {
-          await executeScript(content);
+          await runScriptAwait(content, { stage: 'Preload', modName: mod.name, fileName });
         } catch (e) {
           console.error(`sc2ml-compact: preload script error [${mod.name}] [${fileName}]`, e);
         } finally {
@@ -428,7 +474,14 @@ export class SC2DataManager {
 
   /**
    * Run a single mod's pre-engine scripts: `inject_early` (as DOM scripts) then
-   * `earlyload` (executed). Used during `startInit` and lazy registration.
+   * `earlyload` (awaited via the script-task registry). Used during `startInit`
+   * and lazy registration.
+   *
+   * `inject_early` scripts are injected synchronously (upstream semantics: they
+   * register globals/macros and are not awaited). `earlyload` scripts are wrapped
+   * into promises via {@link runScriptAwait} and pushed to {@link scriptTasks} so
+   * their async bodies complete before the engine boots; the caller awaits them
+   * with {@link drainScriptTasks}.
    */
   async runModPreloadScripts(mod: ModInfo) {
     for (const [ fileName, content ] of mod.scriptFileList_inject_early) {
@@ -440,14 +493,15 @@ export class SC2DataManager {
     for (const [ fileName, content ] of mod.scriptFileList_earlyload) {
       await this.modLoadController.EarlyLoad_start(mod.name, fileName);
       this.runningModName = mod.name;
-      try {
-        await executeScript(content);
-      } catch (e) {
-        console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
-      } finally {
-        this.runningModName = (void 0);
-      }
-      await this.modLoadController.EarlyLoad_end(mod.name, fileName);
+      const task = runScriptAwait(content, { stage: 'EarlyLoad', modName: mod.name, fileName })
+        .catch((e) => {
+          console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
+        })
+        .finally(() => {
+          this.runningModName = (void 0);
+          return this.modLoadController.EarlyLoad_end(mod.name, fileName);
+        });
+      this.addScriptTask(task);
     }
   }
 
@@ -496,17 +550,24 @@ export class SC2DataManager {
   }
 
   /**
-   * Merge mod data over the origin snapshot (scripts/styles replace, passages replace),
-   * apply every mod's replace patches, and build the virtual passage table.
+   * Merge mod data over the current after-patch state (scripts/styles replace,
+   * passages replace), apply every mod's replace patches, and build the virtual
+   * passage table.
+   *
+   * The base is the *current* after-patch cache when one exists, so runtime
+   * modifications made by mod scripts during `inject_early`/`earlyload`
+   * (e.g. ModI18N's translations) are preserved. Without a prior cache it falls
+   * back to a clone of the pristine origin snapshot.
    */
   private buildMergedData(mods: ModInfo[]) {
-    const origin = this.getSC2DataInfoCache();
+    const base = this.cSC2DataInfoAfterPatchCache
+      ?? this.getSC2DataInfoCache().cloneSC2DataInfo();
 
     const em = normalMergeSC2DataInfoCache(
       new SC2DataInfo('EmptyMod'),
       ...mods.map(m => m.cache),
     );
-    const merged = replaceMergeSC2DataInfoCache(origin.cloneSC2DataInfo(), em);
+    const merged = replaceMergeSC2DataInfoCache(base, em);
 
     for (const mod of mods) {
       for (const { fileName, patchInfo } of mod.replacePatchers) {

@@ -40,8 +40,8 @@ export class ModLoader {
     this.modList = mods;
     this.modZipMap.clear();
     for (const mod of mods) {
-      const source = this.thisWin.YASCML.mods.find(item => item.name === mod.name)?.zip;
-      if (source) this.modZipMap.set(mod.name, new SC2ModZip(source, mod));
+      const meta = this.thisWin.YASCML.mods.find(item => item.name === mod.name);
+      if (meta?.zip) this.modZipMap.set(mod.name, new SC2ModZip(meta.zip, mod, meta.md5));
     }
   }
 
