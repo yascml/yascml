@@ -12,8 +12,5 @@
   },
   "preloadScripts": [
     "preload.js"
-  ],
-  "postloadScripts": [
-    "postload.js"
   ]
 }

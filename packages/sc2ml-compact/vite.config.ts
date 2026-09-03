@@ -13,11 +13,10 @@ export default defineConfig(({ mode }) => ({
     lib: {
       entry: {
         preload: resolve(__dirname, 'src/main.ts'),
-        postload: resolve(__dirname, 'src/postload.ts'),
       },
       name: 'SC2MLCompact',
-      fileName: (format, name) => `${name}${format !== 'cjs' ? `.${format}` : ''}.js`,
-      formats: [ 'cjs' ],
+      fileName: (format, name) => `${name}${format !== 'iife' ? `.${format}` : ''}.js`,
+      formats: [ 'iife' ],
     },
     rollupOptions: {
       external: [ 'idb-keyval' ],
@@ -32,17 +31,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
-    {
-      name: 'wrap-cjs-iife',
-      generateBundle(options, bundle) {
-        if (options.format !== 'cjs') return;
-        for (const [, chunk ] of Object.entries(bundle)) {
-          if (chunk.type === 'chunk') {
-            chunk.code = `(function(){${chunk.code}})();`;
-          }
-        }
-      }
-    },
     cp({
       targets: [
         {
