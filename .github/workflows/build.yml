@@ -39,6 +39,8 @@ jobs:
           cp dist/manager/yascmanager.zip dist/docs-install/resources/yascmanager.zip
           cp dist/hook/yaschook.zip dist/docs-install/resources/yaschook.zip
           cp dist/sc2ml-compat/sc2ml-compat.zip dist/docs-install/resources/sc2ml-compat.zip
+          # Nightly userscript
+          cp dist/userscript/yascml.user.js dist/docs/yascml.user.js
 
       - uses: actions/upload-artifact@v4
         with:
