@@ -12,7 +12,7 @@ Visit [online installer](https://yascml.github.io/install/) and follow the instr
 
 ## Using UserScript
 
-Make sure you installed a proper userscript manager, then [click here](yascml.user.js) to install.
+Make sure you installed a proper userscript manager, then [click here](/yascml.user.js) to install.
 
 The userscript runs on online SugarCube games on itch.io by default, you can add/modify `@match` labels of the script manually.
 
