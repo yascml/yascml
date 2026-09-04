@@ -131,23 +131,23 @@ export class ModLoader {
   }
 
   getModReadCache() {
-    console.warn('sc2ml-compact: getModReadCache is unavailable; YASCML owns import storage');
+    console.warn('sc2ml-compat: getModReadCache is unavailable; YASCML owns import storage');
     return (void 0);
   }
 
   getModEarlyLoadCache() {
-    console.warn('sc2ml-compact: getModEarlyLoadCache is unavailable; scripts run directly');
+    console.warn('sc2ml-compat: getModEarlyLoadCache is unavailable; scripts run directly');
     return (void 0);
   }
 
   getLoaderKeyConfig() {
-    console.warn('sc2ml-compact: getLoaderKeyConfig is unavailable; YASCML owns storage configuration');
+    console.warn('sc2ml-compat: getLoaderKeyConfig is unavailable; YASCML owns storage configuration');
     return (void 0);
   }
 
-  getIndexDBLoader() { console.warn('sc2ml-compact: IndexDBLoader is unavailable; use YASCML.mods'); return (void 0); }
-  getLocalStorageLoader() { console.warn('sc2ml-compact: LocalStorageLoader is unavailable; use YASCML.mods'); return (void 0); }
-  getLocalLoader() { console.warn('sc2ml-compact: LocalLoader is unavailable; use YASCML.mods'); return (void 0); }
-  getRemoteLoader() { console.warn('sc2ml-compact: RemoteLoader is unavailable; use YASCML.mods'); return (void 0); }
-  getLazyLoader() { console.warn('sc2ml-compact: LazyLoader is unavailable; use modUtils.lazyRegisterNewModZipData'); return (void 0); }
+  getIndexDBLoader() { console.warn('sc2ml-compat: IndexDBLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLocalStorageLoader() { console.warn('sc2ml-compat: LocalStorageLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLocalLoader() { console.warn('sc2ml-compat: LocalLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getRemoteLoader() { console.warn('sc2ml-compat: RemoteLoader is unavailable; use YASCML.mods'); return (void 0); }
+  getLazyLoader() { console.warn('sc2ml-compat: LazyLoader is unavailable; use modUtils.lazyRegisterNewModZipData'); return (void 0); }
 }

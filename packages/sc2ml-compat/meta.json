@@ -1,12 +1,12 @@
 {
   "id": "sc2ml-compat",
-  "name": "SugarCube2-ModLoader Compact",
+  "name": "SugarCube2-ModLoader Compat",
   "author": {
     "name": "MisaLiu",
     "url": "https://misaliu.top"
   },
   "priority": 20,
-  "homepageURL": "https://github.com/yascml/yascml/tree/main/packages/sc2ml-compact",
+  "homepageURL": "https://github.com/yascml/yascml/tree/main/packages/sc2ml-compat",
   "dependencies": {
     "yaschook": "^1.0.0"
   },

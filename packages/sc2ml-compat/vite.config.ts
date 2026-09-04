@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
       entry: {
         preload: resolve(__dirname, 'src/main.ts'),
       },
-      name: 'SC2MLCompact',
+      name: 'SC2MLCompat',
       fileName: (format, name) => `${name}${format !== 'iife' ? `.${format}` : ''}.js`,
       formats: [ 'iife' ],
     },
@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => ({
     zipPack({
       inDir: resolve(__dirname, './dist'),
       outDir: resolve(__dirname, './dist'),
-      outFileName: 'sc2ml-compact.zip',
+      outFileName: 'sc2ml-compat.zip',
     }),
   ],
 }));

@@ -10,6 +10,7 @@ rush build                  # dev build (incremental)
 rush build:prod             # production build (minified; non-incremental)
 rush extract                # copy prod/doc package dist to <root>/dist/<pkg>
 rushx <script>              # run a package's npm script from inside that package dir
+rush add -p lodash [--dev]  # add a (dev) dependency inside that package dir
 rush build --to @yascml/loader   # build one package and its deps
 ```
 
@@ -32,7 +33,7 @@ rush build --to @yascml/loader   # build one package and its deps
 | `packages/loader` | The browser loader runtime (UMD, global `YASCML`); patches `window.SugarCube` | `dist/loader/yascml.js` |
 | `packages/manager` | Mod manager UI (Preact + Vite) | `dist/manager/yascmanager.zip` |
 | `packages/hook` | SugarCube data-modification library | `dist/hook/yaschook.zip` |
-| `packages/sc2ml-compact` | SC2ML compatibility mods | `dist/sc2ml-compact/sc2ml-compact.zip` |
+| `packages/sc2ml-compat` | SC2ML compatibility mods | `dist/sc2ml-compat/sc2ml-compat.zip` |
 | `packages/patcher` | Node-side game patcher + CLI (`yascpatcher`), only published package | `dist/patcher/` |
 | `packages/userscript` | Tampermonkey script (vite-plugin-monkey) for hot-patching unpatched games | `dist/userscript/yascml.user.js` |
 | `packages/docs` | vuepress-theme-hope docs (build output at `src/.vuepress/dist`) | `dist/docs/` |

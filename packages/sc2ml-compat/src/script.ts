@@ -1,5 +1,5 @@
 /**
- * Script/style injection helpers for sc2ml-compact.
+ * Script/style injection helpers for sc2ml-compat.
  *
  * Prefers the loader's own runtime utils (`window.YASCML.utils.executeScript` /
  * `.loadStyle`) so execution semantics (error handling, blob support) stay

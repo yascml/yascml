@@ -8,7 +8,7 @@ export type ModZipReleasedState = [boolean, boolean | null];
 /**
  * Zip hash used as a stable mod-identity/cache key.
  *
- * The compact implementation reuses the YASCML loader's computed `mod.md5`
+ * The compat implementation reuses the YASCML loader's computed `mod.md5`
  * instead of computing an xxhash. Mods only use this as an opaque cache key
  * (`hash.toString()`), so any stable string works.
  *
@@ -53,7 +53,7 @@ export class ModZipReaderHash {
 /**
  * Compatibility wrapper for the upstream `ModZipReader`.
  *
- * The compact implementation uses YASCML's already-loaded `JSZip` instance and
+ * The compat implementation uses YASCML's already-loaded `JSZip` instance and
  * delegates SC2ML parsing to `parseModZip`. It intentionally does not implement
  * ModPack/encryption support.
  *
@@ -83,7 +83,7 @@ export class SC2ModZip {
     return this._zip;
   }
 
-  /** This compact wrapper only supports ordinary JSZip files. */
+  /** This compat wrapper only supports ordinary JSZip files. */
   get isModPack() {
     return false;
   }
@@ -106,7 +106,7 @@ export class SC2ModZip {
   }
 
   /**
-   * Parse `boot.json` and construct the complete compact `ModInfo`.
+   * Parse `boot.json` and construct the complete compat `ModInfo`.
    * Repeated calls return the existing parsed value.
    */
   async init(): Promise<boolean> {
@@ -124,7 +124,7 @@ export class SC2ModZip {
 
   /**
    * Return the parsed mod, initializing the wrapper when necessary.
-   * This is a compact convenience API; upstream callers can continue using
+   * This is a compat convenience API; upstream callers can continue using
    * `init()` followed by `getModInfo()`.
    */
   async load(): Promise<ModInfo | undefined> {

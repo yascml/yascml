@@ -23,7 +23,7 @@ const getMime = (path: string): string => {
  *
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/master/src/BeforeSC2/ModLoader.ts
  */
-export class CompactModImgGetter implements ModImgGetter {
+export class CompatModImgGetter implements ModImgGetter {
   invalid = false;
   private imgCache?: string;
 
@@ -45,7 +45,7 @@ export class CompactModImgGetter implements ModImgGetter {
     try {
       const imgFile = this.zip.file(this.imgPath);
       if (!imgFile) {
-        console.warn(`CompactModImgGetter: img file not found: ${this.imgPath} in ${this.modName}`);
+        console.warn(`CompatModImgGetter: img file not found: ${this.imgPath} in ${this.modName}`);
         this.invalid = true;
         return undefined;
       }
@@ -53,7 +53,7 @@ export class CompactModImgGetter implements ModImgGetter {
       this.imgCache = `data:${getMime(this.imgPath)};base64,${base64}`;
       return this.imgCache;
     } catch (e) {
-      console.error(`CompactModImgGetter: failed to read ${this.imgPath} in ${this.modName}`, e);
+      console.error(`CompatModImgGetter: failed to read ${this.imgPath} in ${this.modName}`, e);
       this.invalid = true;
       return undefined;
     }
@@ -63,6 +63,6 @@ export class CompactModImgGetter implements ModImgGetter {
 export const buildModImgs = (modName: string, zip: JSZip, imgFileList: string[]): ModImg[] => (
   imgFileList.map(path => ({
     path,
-    getter: new CompactModImgGetter(modName, zip, path),
+    getter: new CompatModImgGetter(modName, zip, path),
   }))
 );

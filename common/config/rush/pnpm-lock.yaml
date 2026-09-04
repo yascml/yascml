@@ -267,7 +267,7 @@ importers:
         specifier: ~0.1.6
         version: 0.1.6
 
-  ../../packages/sc2ml-compact:
+  ../../packages/sc2ml-compat:
     dependencies:
       '@yascml/utils':
         specifier: workspace:*

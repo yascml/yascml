@@ -119,7 +119,7 @@ export class SC2DataManager {
 
   /**
    * Validate that the game exposes the SugarCube 2 story-data structure needed
-   * by the compact compatibility layer. Read-only; never changes the DOM.
+   * by the compat compatibility layer. Read-only; never changes the DOM.
    * Non-critical anomalies are reported as warnings rather than hard failures.
    */
   checkSC2Data() {
@@ -162,11 +162,11 @@ export class SC2DataManager {
   }
 
   /**
-   * Unsupported in the compact no-DOM port. Passage middleware provides the
+   * Unsupported in the compat no-DOM port. Passage middleware provides the
    * supported virtual-passage extension point instead.
    */
   getPassageTracer() {
-    console.warn('sc2ml-compact: PassageTracer is unavailable in the no-DOM port');
+    console.warn('sc2ml-compat: PassageTracer is unavailable in the no-DOM port');
     return (void 0);
   }
 
@@ -178,22 +178,22 @@ export class SC2DataManager {
   }
 
   getJsPreloader() {
-    console.warn('sc2ml-compact: JsPreloader is unavailable; use getNowRunningModName()');
+    console.warn('sc2ml-compat: JsPreloader is unavailable; use getNowRunningModName()');
     return (void 0);
   }
 
   getAddonPluginManager() {
-    console.warn('sc2ml-compact: AddonPluginManager is unavailable in the compact port');
+    console.warn('sc2ml-compat: AddonPluginManager is unavailable in the compat port');
     return (void 0);
   }
 
   getSC2JsEvalContext() {
-    console.warn('sc2ml-compact: SC2JsEvalContext is unavailable in the compact port');
+    console.warn('sc2ml-compat: SC2JsEvalContext is unavailable in the compat port');
     return (void 0);
   }
 
   getWikifyTracer() {
-    console.warn('sc2ml-compact: WikifyTracer is unavailable; use YASCHook.passage instead');
+    console.warn('sc2ml-compat: WikifyTracer is unavailable; use YASCHook.passage instead');
     return (void 0);
   }
 
@@ -328,22 +328,22 @@ export class SC2DataManager {
   }
 
   makePassageNode(_item?: unknown) {
-    console.warn('sc2ml-compact: makePassageNode is unavailable in the no-DOM port');
+    console.warn('sc2ml-compat: makePassageNode is unavailable in the no-DOM port');
     return (void 0);
   }
 
   makeStyleNode(_data?: unknown) {
-    console.warn('sc2ml-compact: makeStyleNode is unavailable in the no-DOM port');
+    console.warn('sc2ml-compat: makeStyleNode is unavailable in the no-DOM port');
     return (void 0);
   }
 
   makeScriptNode(_data?: unknown) {
-    console.warn('sc2ml-compact: makeScriptNode is unavailable in the no-DOM port');
+    console.warn('sc2ml-compat: makeScriptNode is unavailable in the no-DOM port');
     return (void 0);
   }
 
   rePlacePassage(_remove?: Element[], _add?: Element[]) {
-    console.warn('sc2ml-compact: rePlacePassage is unavailable in the no-DOM port');
+    console.warn('sc2ml-compat: rePlacePassage is unavailable in the no-DOM port');
     return (void 0);
   }
 
@@ -377,7 +377,7 @@ export class SC2DataManager {
     this.startInitOk = true;
 
     if (!this.checkSC2Data()) {
-      console.warn('sc2ml-compact: game story data looks unusual; continuing anyway');
+      console.warn('sc2ml-compat: game story data looks unusual; continuing anyway');
     }
 
     this.initSC2DataInfoCache();
@@ -404,7 +404,7 @@ export class SC2DataManager {
 
     // Validate dependencies across the final mod order.
     if (!check(mods)) {
-      console.warn('sc2ml-compact: some mod dependencies are not satisfied');
+      console.warn('sc2ml-compat: some mod dependencies are not satisfied');
     }
 
     // Detect per-mod conflicts (dry-run merge).
@@ -429,7 +429,7 @@ export class SC2DataManager {
    * Run `scriptFileList` user scripts, then `scriptFileList_preload` scripts, then
    * fire `ModLoaderLoadEnd`.
    *
-   * Note: in the compact port this is invoked at the end of {@link startInit} —
+   * Note: in the compat port this is invoked at the end of {@link startInit} —
    * i.e. before the engine boots — matching upstream `JsPreloader.startLoad()`
    * (preload runs after `startInit` but before `mainStart`). It is NOT the
    * YASCML post-engine `postload` phase.
@@ -445,7 +445,7 @@ export class SC2DataManager {
         try {
           await executeScript(item.content);
         } catch (e) {
-          console.error(`sc2ml-compact: user script error [${mod.name}] [${item.name}]`, e);
+          console.error(`sc2ml-compat: user script error [${mod.name}] [${item.name}]`, e);
         } finally {
           this.runningModName = (void 0);
         }
@@ -461,7 +461,7 @@ export class SC2DataManager {
         try {
           await runScriptAwait(content, { stage: 'Preload', modName: mod.name, fileName });
         } catch (e) {
-          console.error(`sc2ml-compact: preload script error [${mod.name}] [${fileName}]`, e);
+          console.error(`sc2ml-compat: preload script error [${mod.name}] [${fileName}]`, e);
         } finally {
           this.runningModName = (void 0);
         }
@@ -495,7 +495,7 @@ export class SC2DataManager {
       this.runningModName = mod.name;
       const task = runScriptAwait(content, { stage: 'EarlyLoad', modName: mod.name, fileName })
         .catch((e) => {
-          console.error(`sc2ml-compact: earlyload script error [${mod.name}] [${fileName}]`, e);
+          console.error(`sc2ml-compat: earlyload script error [${mod.name}] [${fileName}]`, e);
         })
         .finally(() => {
           this.runningModName = (void 0);
@@ -531,7 +531,7 @@ export class SC2DataManager {
         await this.modLoadController.afterModLoad(info.bootJson, mod.zip, info);
       } catch (e) {
         // Not a SC2ML mod (no boot.json) or invalid mod; skip silently with a warning.
-        console.warn(`sc2ml-compact: skip mod "${mod.name}" (${(e as Error).message})`);
+        console.warn(`sc2ml-compat: skip mod "${mod.name}" (${(e as Error).message})`);
       }
     }
     return result;

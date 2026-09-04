@@ -263,7 +263,7 @@ export class ModUtils {
    * ModPack parsing is not supported (crypto out of scope).
    */
   async parseModPack(_modPackBuffer: Uint8Array, _password?: string) {
-    throw new Error('sc2ml-compact: ModPack format is not supported');
+    throw new Error('sc2ml-compat: ModPack format is not supported');
   }
 
   getLanguageManager() {

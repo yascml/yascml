@@ -110,7 +110,7 @@ export const bootNameToId = (name: string): string => (
  *
  * Only identity + ordering fields are emitted. SC2ML script lists / css / passages
  * are NOT mapped to `preloadScripts`/`postloadScripts`/`cssFiles` — those are handled
- * by sc2ml-compact itself at runtime to avoid double execution.
+ * by sc2ml-compat itself at runtime to avoid double execution.
  */
 export const bootJsonToMeta = (bootJ: ModBootJson): ModMetaFile => {
   const author: ModAuthor = { name: 'Unknown (SC2ML)' };
@@ -134,7 +134,7 @@ export const bootJsonToMeta = (bootJ: ModBootJson): ModMetaFile => {
       // Skip `ModLoader` since we will add our own info
       if (d.modName === 'ModLoader') continue;
 
-      // Keep as-is (SC2ML mod names); sc2ml-compact resolves these at runtime.
+      // Keep as-is (SC2ML mod names); sc2ml-compat resolves these at runtime.
       meta.dependencies[d.modName] = d.version;
     }
   }

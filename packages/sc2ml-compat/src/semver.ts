@@ -7,7 +7,7 @@ import { satisfies as semverSatisfies, clean as semverClean } from 'semver';
  * is a `number[]`, `parseRange`/`satisfies` are range tools) so mods written
  * against `sugarcube-2-ModLoader` keep working, but delegates normal 3-part
  * ranges to the well-tested `semver` package. Arbitrarily long versions
- * (e.g. `1.2.3.4`) fall back to a compact numeric comparison.
+ * (e.g. `1.2.3.4`) fall back to a compat numeric comparison.
  *
  * @see https://github.com/Lyoko-Jeremie/sugarcube-2-ModLoader/blob/master/src/BeforeSC2/SemVer/InfiniteSemVer.ts
  */
@@ -109,7 +109,7 @@ const hasNonNpmParts = (versionStr: string): boolean => {
 };
 
 /**
- * Compact numeric fallback for versions/ranges that npm semver can't parse
+ * Compat numeric fallback for versions/ranges that npm semver can't parse
  * (e.g. 4-part versions like `1.2.3.4`). Supports `>`,`>=`,`<`,`<=`,`=`,`^`
  * and `||`-separated sets.
  */

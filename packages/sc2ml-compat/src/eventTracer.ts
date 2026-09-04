@@ -61,7 +61,7 @@ export class Sc2EventTracer {
 
     const $ = (window as any).jQuery;
     if (typeof $ !== 'function') {
-      console.warn('sc2ml-compact: jQuery not available, SC2 runtime hooks disabled');
+      console.warn('sc2ml-compat: jQuery not available, SC2 runtime hooks disabled');
       return;
     }
 
@@ -84,7 +84,7 @@ export class Sc2EventTracer {
               (fn as (p: any, c: HTMLElement) => any).apply(cb, [ passage, content ]);
             }
           } catch (e) {
-            console.error(`sc2ml-compact: error in ${callbackKey} callback`, e);
+            console.error(`sc2ml-compat: error in ${callbackKey} callback`, e);
           }
         }
       });

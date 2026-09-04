@@ -77,7 +77,7 @@ export type LoaderUtils = {
 
 /**
  * A hook called before a mod file is imported (and persisted), allowing e.g.
- * `@yascml/sc2ml-compact` to pre-process SC2ML-format mods (boot.json) into
+ * `@yascml/sc2ml-compat` to pre-process SC2ML-format mods (boot.json) into
  * files that the loader can import directly. Return the (possibly rebuilt) file
  * to be imported and stored.
  */
